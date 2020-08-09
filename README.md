@@ -25,7 +25,7 @@ int main() {
 ```
 
 Client:
-```
+```c++
 #include "foxnet.hpp"
 #include <cstring>
 
