@@ -2,7 +2,7 @@
 
     Author: CPunch <3
 
-    This file is a single-header-library for a basic TCP cross-platform network stack (think ZMQ, but very basic). Built to handle hundreds of clients. 
+    This file is a single-header-library for a basic TCP cross-platform network stack (think RakNet, but very basic). Built to handle hundreds of clients. 
 
     This was (re)written after working on OpenFusion where I learned a lot about how to do networking properly (aka, not how FusionFall did it LOL)
 */
@@ -424,8 +424,16 @@ namespace FoxNet {
             return connection.isAlive();
         }
 
+        void kill() {
+            connection.kill();
+        }
+
         void setPacket(uint16_t ID, FoxPacketHandler handler) {
             packetMap[ID] = handler;
+        }
+
+        void sendPacket(FoxPacket data) {
+            connection.sendPacket(data);
         }
 
         void step() {
@@ -441,4 +449,4 @@ namespace FoxNet {
     };
 }
 
-#endif // hey don't fuck around, your time gets shorter each day. you'll end up sorry-i know
+#endif // hey don't mess around, your time gets shorter each day. you'll end up sorry-i know
