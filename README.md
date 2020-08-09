@@ -36,7 +36,7 @@ int main() {
   
   char* dataTest = "Hello world!";
   
-  client.sendPacket(FoxNet::FoxPacket(2, (void*)dataTest, strlen(dataTest));
+  client.sendPacket(FoxNet::FoxPacket(2, (void*)dataTest, strlen(dataTest)));
   
   client.kill(); // disconnects from the server
   FoxNet::cleanup(); // cleans up WSA
