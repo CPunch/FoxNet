@@ -1,14 +1,10 @@
 /*  Free Open Xross Network
 
-    Author: CPunch <3
-
-    This file is a single-header-library for a basic TCP cross-platform network stack (think RakNet, but very basic). Built to handle hundreds of clients. 
-
-    This was (re)written after working on OpenFusion where I learned a lot about how to do networking properly (aka, not how FusionFall did it LOL)
+    This file is a single-header-library for a basic TCP cross-platform event-driven network stack. 
 */
 
-#ifndef _FoxNet_PROTOCOL
-#define _FoxNet_PROTOCOL
+#ifndef _FOXNET_PROTOCOL
+#define _FOXNET_PROTOCOL
 
 #include <iostream>
 #include <cstdint>
@@ -22,6 +18,9 @@
     #include <errno.h>
 
     typedef int SOCKET;
+    typedef void buffer_t;
+    #define FOXERRNO errno
+    #define FOXEWOULDBLOCK EWOULDBLOCK
     #define SOCKETINVALID(x) (x < 0)
     #define SOCKETERROR(x) (x == -1)
 #else
@@ -31,23 +30,28 @@
     #include <ws2tcpip.h>
     #pragma comment(lib, "Ws2_32.lib")
 
-    #define errno WSAGetLastError()
+    typedef char buffer_t;
+    #define FOXERRNO WSAGetLastError()
+    #define FOXEWOULDBLOCK WSAEWOULDBLOCK
     #define SOCKETINVALID(x) (x == INVALID_SOCKET)
     #define SOCKETERROR(x) (x == SOCKET_ERROR)
 #endif
 #include <fcntl.h>
+#include <csignal>
 
 #include <string>
-#include <thread>
 #include <mutex>
+#include <queue>
 #include <list>
 #include <map>
-
 #define MAX_PACKETSIZE 1024 * 8
+
+#define DEBUGLOG(x) x
 
 namespace FoxNet {
     // INIT/QUIT (mainly for windows bc windows SUCKKKKKSSSSSSS)
     inline void init() {
+        signal(SIGPIPE, SIG_IGN);
 #ifdef _WIN32
         WSADATA wsa_data;
         return WSAStartup(MAKEWORD(1,1), &wsa_data);
@@ -64,10 +68,29 @@ namespace FoxNet {
     inline void* xmalloc(size_t sz) {
         void* buf = calloc(1, sz);
         if (buf == NULL) {
-            std::cerr << "[FATAL] FoxNet: calloc failed!" << std::endl;
+            DEBUGLOG(std::cerr << "[FATAL] FoxNet: calloc failed!" << std::endl);
             exit(EXIT_FAILURE);
         }
         return buf;
+    }
+
+    namespace FoxObfuscaton {
+        static const int defaultKey = 0x34;
+
+        // xors data with default static key
+        void xorData(void* buf, size_t sz, int key) {
+            for (uint8_t* b = (uint8_t*)buf; b < (uint8_t*)buf + sz; b++) {
+                *b ^= key;
+            }
+        }
+
+        void encodeData(void* buf, size_t sz) {
+            xorData(buf, sz, defaultKey);
+        }
+
+        void decodeData(void* buf, size_t sz) {
+            xorData(buf, sz, defaultKey);
+        }
     }
 
     struct FoxPacket {
@@ -85,26 +108,43 @@ namespace FoxNet {
         void* recvBuffer;
         uint32_t recvSize = 0;
         int recvIndex = 0;
-        bool activelyReading = false;
         bool alive = true;
 
+        // guaranteed to send all the data
         bool sendData(void* data, int size) {
             int sentBytes = 0;
 
             while (sentBytes < size) {
-        #ifdef _WIN32
-                int sent = send(sock, (char*)((uint8_t*)data + sentBytes), size - sentBytes, 0); // no flags defined
-        #else 
-                int sent = send(sock, (void*)((uint8_t*)data + sentBytes), size - sentBytes, 0); // no flags defined
-        #endif
-                if (SOCKETERROR(sent)) 
+                int sent = write(sock, (buffer_t*)((uint8_t*)data + sentBytes), size - sentBytes); // no flags defined
+
+                if (SOCKETERROR(sent)) {
                     return false; // error occured while sending bytes
+                }
                 sentBytes += sent;
             }
 
             return true; // it worked!
         }
 
+        // not guaranteed to recieve all the data! check the return value for how much data was actually recieved!!
+        int recieveData(SOCKET s, buffer_t* buf, size_t sz) {
+            int recved = read(s, buf, sz);
+
+            if (SOCKETERROR(recved)) {
+                if (FOXERRNO == FOXEWOULDBLOCK) {
+                    // try again
+                    return -1;
+                }
+
+                // a serious socket error occured, close the connection!
+                kill();
+                return -1;
+            }
+
+            // we got the data successfully!
+            return recved;
+        }
+        
     public:
         FoxConnection() {}
         FoxConnection(SOCKET s): 
@@ -116,6 +156,7 @@ namespace FoxNet {
 
         void kill() {
             alive = false;
+            
 #ifdef _WIN32
             shutdown(sock, SD_BOTH);
             closesocket(sock);
@@ -125,72 +166,76 @@ namespace FoxNet {
 #endif
         }
 
-        void sendPacket(FoxPacket data) {
+        bool sendPacket(FoxPacket& data) {
             uint32_t pSize = htonl(data.size + sizeof(uint16_t));
             uint16_t pType = htons(data.type);
+
+            // we allocate a tmpBuf so we can obfuscate the bytes with FoxObfuscate::encodeData()
+            void* tmpBuf = xmalloc(data.size + sizeof(uint16_t));
+            // copy packet ID
+            memcpy(tmpBuf, (void*)&pType, sizeof(uint16_t));
+            // copy packet data to tmpBuf after the packet ID
+            memcpy((uint8_t*)tmpBuf + sizeof(uint16_t), data.data, data.size);
+
+            // encode the data
+            FoxObfuscaton::encodeData(tmpBuf, data.size + sizeof(uint16_t));
 
             // send size of the pack (includes type)
             if (!sendData((void*)&pSize, sizeof(uint32_t))) { // failed to send the data
                 kill();
-                return;
+                free(tmpBuf);
+                return false;
             }
 
-            if (!sendData((void*)&pType, sizeof(uint16_t))) {
+            // send obfuscated packet
+            if (!sendData(tmpBuf, data.size + sizeof(uint16_t))) {
                 kill();
-                return;
+                free(tmpBuf);
+                return false;
             }
 
-            if (!sendData(data.data, data.size)) {
-                kill();
-                return;
-            }
+            // free tmpBuf
+            free(tmpBuf);
+            return true;
         }
 
         FoxPacket* step() {
-            if (!activelyReading) {
+            if (recvSize == 0) {
                 // read packet size
-#ifdef _WIN32
-                int recved = recv(sock, (char*)&recvSize, sizeof(uint32_t), 0);
-#else
-                int recved = recv(sock, (void*)&recvSize, sizeof(uint32_t), 0);
-#endif
+                int recved;
 
-                // sanity checks 0 = shutdown, -1 = error, either way, close this socket.
-                if (SOCKETERROR(recved) && errno != EAGAIN) {
-                    kill();
+                // set recved & if recieveData failed, return NULL
+                if ((recved = recieveData(sock, (buffer_t*)&recvSize, sizeof(uint32_t))) == -1)
                     return NULL;
-                }
+                
                 recvSize = ntohl(recvSize);
 
-                if (recvSize == 0) {
-                    return NULL;
-                }
 
-                if (recvSize > MAX_PACKETSIZE) {
+                if (recvSize > MAX_PACKETSIZE) { // possible DDoS attack, abort connection
                     kill();
                     return NULL;
                 }
 
-                activelyReading = true;
-                recvBuffer = xmalloc(recvSize);
+                if (recvSize > 0) {
+                    std::cout << "got packet size: " << recvSize << std::endl;
+                    recvBuffer = xmalloc(recvSize);
+                }
             }
 
-            if (activelyReading && recvIndex < recvSize) {
-#ifdef _WIN32
-                int recved = recv(sock, (char*)((uint8_t*)recvBuffer + recvIndex), recvSize, 0);
-#else
-                int recved = recv(sock, (void*)((uint8_t*)recvBuffer + recvIndex), recvSize, 0);
-#endif
-                if (SOCKETERROR(recved) && errno != EAGAIN) {
-                    kill();
+            if (recvSize > 0 && recvIndex < recvSize) {
+                int recved = recieveData(sock, (buffer_t*)((uint8_t*)recvBuffer + recvIndex), recvSize);
+
+                if (recved == -1) 
                     return NULL;
-                } else {
+                else
                     recvIndex += recved;
-                }
             }
 
             // check if we've finished reading the packet!
-            if (activelyReading && recvIndex - recvSize == 0) {
+            if (recvSize > 0 && recvIndex - recvSize == 0) {
+                // unobfuscate the data
+                FoxObfuscaton::decodeData(recvBuffer, recvSize);
+
                 // copy buffer without packet type
                 int tmpSize = recvSize - sizeof(uint16_t);
                 void* tmpBuf = xmalloc(tmpSize);
@@ -207,7 +252,6 @@ namespace FoxNet {
                 recvBuffer = NULL;
                 recvSize = 0;
                 recvIndex = 0;
-                activelyReading = false;
 
                 // return allocated packet!
                 return packet;
@@ -230,10 +274,11 @@ namespace FoxNet {
         uint16_t port;
         socklen_t addressSize;
         struct sockaddr_in address;
+        bool active = true;
 
         void packetHandler(FoxConnection* sock, FoxPacket* data) {
             if (packetMap.find(data->type) == packetMap.end()) {
-                std::cerr << "[WARN] FoxNet: unknown packet type [" << data->type << "]" << std::endl;
+                DEBUGLOG(std::cerr << "[WARN] FoxNet: unknown packet type [" << data->type << "]" << std::endl);
                 return;
             }
 
@@ -245,7 +290,7 @@ namespace FoxNet {
             // create socket file descriptor 
             sock = socket(AF_INET, SOCK_STREAM, 0);
             if (SOCKETINVALID(sock)) { 
-                std::cerr << "[FATAL] FoxNet: socket failed" << std::endl; 
+                DEBUGLOG(std::cerr << "[FATAL] FoxNet: socket failed" << std::endl); 
                 exit(EXIT_FAILURE); 
             }
 
@@ -256,7 +301,7 @@ namespace FoxNet {
 #else
             if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) != 0) { 
 #endif
-                std::cerr << "[FATAL] FoxNet: setsockopt failed" << std::endl; 
+                DEBUGLOG(std::cerr << "[FATAL] FoxNet: setsockopt failed" << std::endl); 
                 exit(EXIT_FAILURE); 
             } 
             address.sin_family = AF_INET; 
@@ -267,12 +312,12 @@ namespace FoxNet {
 
             // Bind to the port
             if (SOCKETERROR(bind(sock, (struct sockaddr *)&address, addressSize))) { 
-                std::cerr << "[FATAL] FoxNet: bind failed" << std::endl; 
+                DEBUGLOG(std::cerr << "[FATAL] FoxNet: bind failed" << std::endl); 
                 exit(EXIT_FAILURE); 
             }
 
             if (SOCKETERROR(listen(sock, SOMAXCONN))) {
-                std::cerr << "[FATAL] FoxNet: listen failed" << std::endl; 
+                DEBUGLOG(std::cerr << "[FATAL] FoxNet: listen failed" << std::endl); 
                 exit(EXIT_FAILURE); 
             }
 
@@ -283,9 +328,37 @@ namespace FoxNet {
 #else
             if (fcntl(sock, F_SETFL, (fcntl(sock, F_GETFL, 0) | O_NONBLOCK)) != 0) {
 #endif
-                std::cerr << "[FATAL] FoxNet: fcntl failed" << std::endl; 
+                DEBUGLOG(std::cerr << "[FATAL] FoxNet: fcntl failed" << std::endl); 
                 exit(EXIT_FAILURE); 
             }
+        }
+
+        ~FoxServer() {
+            kill();
+        }
+
+        void kill() {
+            if (!active)
+                return;
+            
+            active = false;
+
+            std::lock_guard<std::mutex> lock(activeCritical); // the lock will be removed when the function ends
+#ifdef _WIN32
+            shutdown(sock, SD_BOTH);
+            closesocket(sock);
+#else
+            shutdown(sock, SHUT_RDWR);
+            close(sock);
+#endif
+
+            // kill all connections
+            for (FoxConnection* con : connections) {
+                con->kill();
+                delete con;
+            }
+
+            connections.clear();
         }
 
         void setPacket(uint16_t ID, FoxPacketHandler handler) {
@@ -296,12 +369,23 @@ namespace FoxNet {
         void sendPacketToAll(FoxPacket data) {
             std::lock_guard<std::mutex> lock(activeCritical); // the lock will be removed when the function ends
 
-            for (FoxConnection* sock: connections) {
-                if (sock->isAlive()) {
-                    sock->sendPacket(data);
+            for (FoxConnection* con: connections) {
+                if (con->isAlive()) {
+                    con->sendPacket(data);
                 }
                 // let step() deal with all the dead connections /shrug
             }
+        }
+
+        bool sendPacket(FoxConnection* sock, FoxPacket data) {
+            std::lock_guard<std::mutex> lock(activeCritical); // the lock will be removed when the function ends
+
+            if (!sock->isAlive())
+                return false;
+
+            sock->sendPacket(data);
+
+            return true;
         }
 
         void step() {
@@ -316,15 +400,16 @@ namespace FoxNet {
 #else
                 if (fcntl(newConnection, F_SETFL, (fcntl(sock, F_GETFL, 0) | O_NONBLOCK)) != 0) {
 #endif
-                    std::cerr << "[FATAL] FoxNet: fcntl failed on new connection" << std::endl; 
+                    DEBUGLOG(std::cerr << "[FATAL] FoxNet: fcntl failed on new connection" << std::endl); 
                     exit(EXIT_FAILURE); 
                 }
 
-                std::cout << "New connection! " << inet_ntoa(address.sin_addr) << std::endl;
+                DEBUGLOG(std::cout << "New connection! " << inet_ntoa(address.sin_addr) << std::endl);
 
                 // add connection to list!
                 FoxConnection* tmp = new FoxConnection(newConnection);
                 connections.push_back(tmp);
+                onConnect(tmp);
             }
 
             // for each active connection, step()
@@ -333,6 +418,7 @@ namespace FoxNet {
                 FoxConnection* current = *i;
 
                 if (!current->isAlive()) { // remove inactive connections
+                    onDisconnect(current);
                     delete current;
                     connections.erase(i++);
                     continue;
@@ -352,25 +438,33 @@ namespace FoxNet {
 
         // meant to be started in a seperate thread
         void start() {
-            while (true) {
+            while (active) {
                 step();
+#ifdef _WIN32
+                Sleep(0);
+#else
                 sleep(0); // lets the OS run other threads so we're not hitting 100% CPU
+#endif
             }
         }
+
+        // events meant to be overwritten
+        virtual void onConnect(FoxConnection* sock) {}
+        virtual void onDisconnect(FoxConnection* sock) {} 
     };
 
     class FoxClient {
     private:
         std::map<uint16_t, FoxPacketHandler> packetMap;
+        std::mutex activeCritical;
 
         FoxConnection connection;
         std::string address;
         uint16_t port;
 
         void packetHandler(FoxConnection* sock, FoxPacket* data) {
-            std::cout << "got packet: " << data->type << std::endl;
             if (packetMap.find(data->type) == packetMap.end()) {
-                std::cerr << "[WARN] FoxNet: unknown packet type [" << data->type << "]" << std::endl;
+                DEBUGLOG(std::cerr << "[WARN] FoxNet: unknown packet type [" << data->type << "]" << std::endl);
                 return;
             }
 
@@ -382,7 +476,7 @@ namespace FoxNet {
             struct sockaddr_in serv_addr;
             SOCKET sock = socket(AF_INET, SOCK_STREAM, 0);
             if (SOCKETINVALID(sock)) {
-                std::cerr << "[FATAL] FoxNet: socket failed" << std::endl; 
+                DEBUGLOG(std::cerr << "[FATAL] FoxNet: socket failed" << std::endl); 
                 exit(EXIT_FAILURE); 
             }
 
@@ -395,13 +489,13 @@ namespace FoxNet {
 #else
             if(inet_pton(AF_INET, address.c_str(), &serv_addr.sin_addr) != 1) {
 #endif
-                std::cerr << "[FATAL] FoxNet: Invalid address" << std::endl; 
+                DEBUGLOG(std::cerr << "[FATAL] FoxNet: Invalid address" << std::endl); 
                 exit(EXIT_FAILURE);
             }
 
             // Connect to server
             if (SOCKETERROR(connect(sock, (struct sockaddr *)&serv_addr, sizeof(serv_addr)))) {
-                std::cerr << "[FATAL] FoxNet: connection failed" << std::endl; 
+                DEBUGLOG(std::cerr << "[FATAL] FoxNet: connection failed" << std::endl); 
                 exit(EXIT_FAILURE);
             }
 
@@ -412,7 +506,7 @@ namespace FoxNet {
 #else
             if (fcntl(sock, F_SETFL, (fcntl(sock, F_GETFL, 0) | O_NONBLOCK)) != 0) {
 #endif
-                std::cerr << "[FATAL] FoxNet: fcntl failed" << std::endl; 
+                DEBUGLOG(std::cerr << "[FATAL] FoxNet: fcntl failed" << std::endl); 
                 exit(EXIT_FAILURE); 
             }
             
@@ -425,6 +519,7 @@ namespace FoxNet {
         }
 
         void kill() {
+            std::cout << "dead >:(" << std::endl;
             connection.kill();
         }
 
@@ -433,10 +528,14 @@ namespace FoxNet {
         }
 
         void sendPacket(FoxPacket data) {
+            std::lock_guard<std::mutex> lock(activeCritical); // the lock will be removed when the function ends
+
             connection.sendPacket(data);
         }
 
         void step() {
+            std::lock_guard<std::mutex> lock(activeCritical); // the lock will be removed when the function ends
+
             if (connection.isAlive()) {
                 FoxPacket* packet = connection.step();
                 if (packet != NULL) {
