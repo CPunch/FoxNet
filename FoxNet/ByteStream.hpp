@@ -50,7 +50,7 @@ namespace FoxNet {
                 } source, dest;
 
                 // read bytes into union to be swapped
-                readBytes((Byte*)&source.u, sizeof(T));
+                readBytes(&source.u8, sizeof(T));
 
                 // copy source to dest, flipping endian
                 for (size_t k = 0; k < sizeof(T); k++)
@@ -79,7 +79,7 @@ namespace FoxNet {
                     dest.u8[k] = source.u8[sizeof(T) - k - 1];
 
                 // write the result
-                writeBytes((Byte*)&dest.u, sizeof(T));
+                writeBytes(&dest.u8, sizeof(T));
             } else {
                 // just read the data straight
                 writeBytes((Byte*)&data, sizeof(T));
