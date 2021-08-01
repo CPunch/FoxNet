@@ -2,6 +2,7 @@
 
 #include <cstdlib>
 #include <cstdint>
+#include <climits>
 #include <vector>
 
 #define BSTREAM_RESERVED 64
@@ -15,6 +16,7 @@ namespace FoxNet {
     class ByteStream {
     private:
         std::vector<Byte> buffer;
+        bool flipEndian = false;
 
     public:
         ByteStream();
@@ -24,8 +26,65 @@ namespace FoxNet {
         void flush(); // clears the buffer
         size_t size();
 
+        // if set to true, integers read and written will be automatically flipped to the opposite endian-ness
+        // note: this only has an effect if the integers are written or read using writeUInt() or readUInt()
+        void setFlipEndian(bool);
+
         void readBytes(Byte *out, size_t sz);
         void writeBytes(Byte *in, size_t sz);
+
+        inline void writeByte(Byte in) {
+            writeBytes(&in, 1);
+        }
+
+        inline void readByte(Byte &out) {
+            readBytes(&out, 1);
+        }
+
+        template <typename T>
+        void readUInt(T& data) {
+            if (flipEndian) {
+                union {
+                    T u;
+                    Byte u8[sizeof(T)];
+                } source, dest;
+
+                // read bytes into union to be swapped
+                readBytes((Byte*)&source.u, sizeof(T));
+
+                // copy source to dest, flipping endian
+                for (size_t k = 0; k < sizeof(T); k++)
+                    dest.u8[k] = source.u8[sizeof(T) - k - 1];
+
+                data = dest.u;
+            } else {
+                // just read the data straight
+                readBytes((Byte*)&data, sizeof(T));
+            }
+        }
+
+        template <typename T>
+        void writeUInt(const T data) {
+            if (flipEndian) {
+                union {
+                    T u;
+                    Byte u8[sizeof(T)];
+                } source, dest;
+
+                // read bytes into union to be swapped
+                source.u = data;
+
+                // copy source to dest, flipping endian
+                for (size_t k = 0; k < sizeof(T); k++)
+                    dest.u8[k] = source.u8[sizeof(T) - k - 1];
+
+                // write the result
+                writeBytes((Byte*)&dest.u, sizeof(T));
+            } else {
+                // just read the data straight
+                writeBytes((Byte*)&data, sizeof(T));
+            }
+        }
 
         template<typename T>
         inline void writeData(const T& data) {

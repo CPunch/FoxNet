@@ -49,8 +49,9 @@ FoxClient::FoxClient(std::string ip, std::string port) {
     // connection successful! send handshake
     stream.writeData((PktID)C2S_HANDSHAKE);
     stream.writeBytes((Byte*)FOXMAGIC, FOXMAGICLEN);
-    stream.writeData((Byte)FOXNET_MAJOR);
-    stream.writeData((Byte)FOXNET_MINOR);
+    stream.writeByte(FOXNET_MAJOR);
+    stream.writeByte(FOXNET_MINOR);
+    stream.writeByte(isBigEndian());
     flushSend();
 }
 

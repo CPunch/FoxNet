@@ -21,6 +21,10 @@ size_t ByteStream::size() {
     return buffer.size();
 }
 
+void ByteStream::setFlipEndian(bool _e) {
+    flipEndian = _e;
+}
+
 void ByteStream::readBytes(Byte *out, size_t sz) {
     std::copy(buffer.begin(), buffer.begin() + sz, out);
     buffer.erase(buffer.begin(), buffer.begin() + sz);

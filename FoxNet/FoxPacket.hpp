@@ -11,12 +11,14 @@ namespace FoxNet {
 
     // we have room for up to 256 different packet types (for now)
     typedef enum {
-        // CLIENT TO SERVER PACKETS
-        C2S_HANDSHAKE, // sends info like FoxNet version & endian flags
-        END_C2P_PACKETS,
-        // SERVER TO CLIENT PACKETS
-        S2C_HANDSHAKE, // responds to C2S_HANDSHAKE, tells endian flags and if the handshake is accepted
         PKTID_NONE, // invalid packet ID, probably means we're waiting for a packet
+        // ======= CLIENT TO SERVER PACKETS =======
+        C2S_HANDSHAKE, // sends info like FoxNet version & endian flag
+        END_C2P_PACKETS,
+
+        // ======= SERVER TO CLIENT PACKETS =======
+        S2C_HANDSHAKE, // responds to C2S_HANDSHAKE, tells if the handshake is accepted
+        PKTID_USER_PACKET_START,
     } PEER_PACKET_ID;
 
     typedef void (*PktHandler)(ByteStream *stream, FoxPeer *peer, void *udata);
@@ -26,6 +28,15 @@ namespace FoxNet {
         PktHandler handler;
         int subscriber; // only peers of type PEERTYPE can accept this packet
     };
+
+    inline bool isBigEndian() {
+        union {
+            uint32_t i;
+            Byte c[4];
+        } _indxint = {0xDEADB33F};
+
+        return _indxint.c[0] == 0xDE;
+    }
 
     size_t getPacketSize(PktID);
     PktHandler getPacketHandler(PktID);

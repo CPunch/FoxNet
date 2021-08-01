@@ -15,21 +15,25 @@ using namespace FoxNet;
 DEF_FOXNET_PACKET(C2S_HANDSHAKE) {
     FoxServer *server = (FoxServer*)udata;
     char magic[FOXMAGICLEN];
-    Byte minor, major;
+    Byte minor, major, endian;
     Byte response;
 
     stream->readBytes((Byte*)magic, FOXMAGICLEN);
-    stream->readData(major);
-    stream->readData(minor);
+    stream->readByte(major);
+    stream->readByte(minor);
+    stream->readByte(endian);
     stream->flush();
 
-    std::cout << "Got handshake : (" << magic << ") " << (int)major << "." << (int)minor << std::endl;
+    // if our endians are different, set the stream to flip the endians!
+    stream->setFlipEndian(endian != isBigEndian());
+
+    std::cout << "Got handshake : (" << magic << ") " << (int)major << "." << (int)minor << " endian type : " << (endian ? "BIG" : "LITTLE") << std::endl;
     response = !memcmp(magic, FOXMAGIC, FOXMAGICLEN) && major == FOXNET_MAJOR;
 
     // now respond
     stream->writeData((PktID)S2C_HANDSHAKE);
     stream->writeBytes((Byte*)magic, FOXMAGICLEN);
-    stream->writeData(response);
+    stream->writeByte(response);
     peer->flushSend();
 }
 
@@ -40,14 +44,14 @@ DEF_FOXNET_PACKET(S2C_HANDSHAKE) {
     Byte response;
 
     stream->readBytes((Byte*)magic, FOXMAGICLEN);
-    stream->readData(response);
+    stream->readByte(response);
     stream->flush();
 
     std::cout << "got handshake response : " << (response ? "accepted!" : "failed!") << std::endl;
 }
 
 const std::map<PktID, PacketInfo> PktMap = {
-    INIT_FOXNET_MAP(C2S_HANDSHAKE, PEER_SERVER, (sizeof(Byte) + sizeof(Byte) + FOXMAGICLEN))
+    INIT_FOXNET_MAP(C2S_HANDSHAKE, PEER_SERVER, (sizeof(Byte) + sizeof(Byte) + sizeof(Byte) + FOXMAGICLEN))
     INIT_FOXNET_MAP(S2C_HANDSHAKE, PEER_CLIENT, (sizeof(Byte) + FOXMAGICLEN))
 };
 
