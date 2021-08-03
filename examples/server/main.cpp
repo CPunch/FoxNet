@@ -1,4 +1,4 @@
-#include "FoxNet/FoxServer.hpp"
+#include "FoxServer.hpp"
 
 #include <iostream>
 
