@@ -28,7 +28,7 @@ namespace FoxNet {
         PKTID_USER_PACKET_START, // marks the start of user packets
     } PEER_PACKET_ID;
 
-    typedef void (*PktHandler)(ByteStream *stream, FoxPeer *peer, void *udata);
+    typedef void (*PktHandler)(FoxPeer *peer, void *udata);
 
     struct PacketInfo {
         size_t pSize;
@@ -45,6 +45,8 @@ namespace FoxNet {
         return _indxint.c[0] == 0xDE;
     }
 
+    // use this to define your own packet types, subscriber is a PEERTYPE.
+    void registerUserPacket(PktID uid, PktHandler handler, int subscriber, size_t pSize);
     size_t getPacketSize(PktID);
     PktHandler getPacketHandler(PktID);
     int getPacketType(PktID);

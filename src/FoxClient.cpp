@@ -77,6 +77,8 @@ void FoxClient::pollPeer(int timeout) {
     }
 
     // try steping, if there was an error handling a packet, kill the connection!
-    if (!step())
+    if (!step()) {
+        std::cerr << "packet error! errno. " << FN_ERRNO << std::endl;
         kill();
+    }
 }

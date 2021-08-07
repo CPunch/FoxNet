@@ -5,7 +5,7 @@
 #include <cstring>
 #include <iostream>
 
-#define DEF_FOXNET_PACKET(ID) void HANDLER_##ID(ByteStream *stream, FoxPeer *peer, void *udata)
+#define DEF_FOXNET_PACKET(ID) void HANDLER_##ID(FoxPeer *peer, void *udata)
 #define INIT_FOXNET_MAP(ID, ptype, sz) {ID, {sz, HANDLER_##ID, ptype}},
 
 using namespace FoxNet;
@@ -13,7 +13,8 @@ using namespace FoxNet;
 // ============================================= [[ CLIENT 2 SERVER ]] =============================================
 
 DEF_FOXNET_PACKET(C2S_HANDSHAKE) {
-    FoxServer *server = (FoxServer*)udata;
+    //FoxServer *server = (FoxServer*)udata;
+    ByteStream *stream = peer->getStream();
     char magic[FOXMAGICLEN];
     Byte minor, major, endian;
     Byte response;
@@ -27,20 +28,20 @@ DEF_FOXNET_PACKET(C2S_HANDSHAKE) {
     // if our endians are different, set the stream to flip the endians!
     stream->setFlipEndian(endian != isBigEndian());
 
-    std::cout << "Got handshake : (" << magic << ") " << (int)major << "." << (int)minor << " endian type : " << (endian ? "BIG" : "LITTLE") << std::endl;
+    std::cout << "Got handshake : (" << magic << ") " << (int)major << "." << (int)minor << " flip endian : " << (endian != isBigEndian() ? "TRUE" : "FALSE") << std::endl;
     response = !memcmp(magic, FOXMAGIC, FOXMAGICLEN) && major == FOXNET_MAJOR;
 
     // now respond
-    stream->writeData((PktID)S2C_HANDSHAKE);
+    stream->writeByte(S2C_HANDSHAKE);
     stream->writeBytes((Byte*)magic, FOXMAGICLEN);
     stream->writeByte(response);
-    peer->flushSend();
 }
 
 // ============================================= [[ SERVER 2 CLIENT ]] =============================================
 
 DEF_FOXNET_PACKET(S2C_HANDSHAKE) {
     char magic[FOXMAGICLEN];
+    ByteStream *stream = peer->getStream();
     Byte response;
 
     stream->readBytes((Byte*)magic, FOXMAGICLEN);
@@ -48,12 +49,18 @@ DEF_FOXNET_PACKET(S2C_HANDSHAKE) {
     stream->flush();
 
     std::cout << "got handshake response : " << (response ? "accepted!" : "failed!") << std::endl;
+
+    peer->callEvent(PEEREVENT_ONREADY);
 }
 
-const std::map<PktID, PacketInfo> PktMap = {
+std::map<PktID, PacketInfo> PktMap = {
     INIT_FOXNET_MAP(C2S_HANDSHAKE, PEER_SERVER, (sizeof(Byte) + sizeof(Byte) + sizeof(Byte) + FOXMAGICLEN))
     INIT_FOXNET_MAP(S2C_HANDSHAKE, PEER_CLIENT, (sizeof(Byte) + FOXMAGICLEN))
 };
+
+void FoxNet::registerUserPacket(PktID uid, PktHandler handler, int subscriber, size_t pktsize) {
+    PktMap[uid] = {pktsize, handler, subscriber};
+}
 
 size_t FoxNet::getPacketSize(PktID id) {
     auto iter = PktMap.find(id);

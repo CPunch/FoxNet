@@ -51,8 +51,16 @@ namespace FoxNet {
         PEER_SERVER
     } PEERTYPE;
 
+    typedef void (*EventCallback)(FoxPeer *peer);
+
+    typedef enum {
+        PEEREVENT_ONREADY, /* for PEER_CLIENT this is fired whenever the handshake response is accepted */
+        PEEREVENT_MAX
+    } PEEREVENT;
+
     class FoxPeer {
     protected:
+        EventCallback events[PEEREVENT_MAX];
         ByteStream stream;
         bool alive = true;
         PktID currentPkt = PKTID_NONE;
@@ -61,19 +69,22 @@ namespace FoxNet {
         size_t pktSize;
 
         int rawRecv(size_t sz);
+        bool flushSend();
 
     public:
         PEERTYPE type = PEER_CLIENT;
         FoxPeer();
         FoxPeer(SOCKET);
 
+        bool callEvent(PEEREVENT id);
         bool isAlive();
 
+        ByteStream* getStream();
+
         void setHndlerUData(void*);
+        void setEvent(PEEREVENT eventID, EventCallback callback);
 
         void kill();
         bool step();
-
-        bool flushSend();
     };
 }
