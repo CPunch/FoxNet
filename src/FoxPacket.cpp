@@ -14,39 +14,37 @@ using namespace FoxNet;
 
 DEF_FOXNET_PACKET(C2S_HANDSHAKE) {
     //FoxServer *server = (FoxServer*)udata;
-    ByteStream *stream = peer->getStream();
     char magic[FOXMAGICLEN];
     Byte minor, major, endian;
     Byte response;
 
-    stream->readBytes((Byte*)magic, FOXMAGICLEN);
-    stream->readByte(major);
-    stream->readByte(minor);
-    stream->readByte(endian);
-    stream->flush();
+    peer->readBytes((Byte*)magic, FOXMAGICLEN);
+    peer->readByte(major);
+    peer->readByte(minor);
+    peer->readByte(endian);
+    peer->flush();
 
-    // if our endians are different, set the stream to flip the endians!
-    stream->setFlipEndian(endian != isBigEndian());
+    // if our endians are different, set the peer to flip the endians!
+    peer->setFlipEndian(endian != isBigEndian());
 
     std::cout << "Got handshake : (" << magic << ") " << (int)major << "." << (int)minor << " flip endian : " << (endian != isBigEndian() ? "TRUE" : "FALSE") << std::endl;
     response = !memcmp(magic, FOXMAGIC, FOXMAGICLEN) && major == FOXNET_MAJOR;
 
     // now respond
-    stream->writeByte(S2C_HANDSHAKE);
-    stream->writeBytes((Byte*)magic, FOXMAGICLEN);
-    stream->writeByte(response);
+    peer->writeByte(S2C_HANDSHAKE);
+    peer->writeBytes((Byte*)magic, FOXMAGICLEN);
+    peer->writeByte(response);
 }
 
 // ============================================= [[ SERVER 2 CLIENT ]] =============================================
 
 DEF_FOXNET_PACKET(S2C_HANDSHAKE) {
     char magic[FOXMAGICLEN];
-    ByteStream *stream = peer->getStream();
     Byte response;
 
-    stream->readBytes((Byte*)magic, FOXMAGICLEN);
-    stream->readByte(response);
-    stream->flush();
+    peer->readBytes((Byte*)magic, FOXMAGICLEN);
+    peer->readByte(response);
+    peer->flush();
 
     std::cout << "got handshake response : " << (response ? "accepted!" : "failed!") << std::endl;
 

@@ -55,7 +55,7 @@ void FoxPeer::setEvent(PEEREVENT id, EventCallback evnt) {
 }
 
 bool FoxPeer::flushSend() {
-    std::vector<Byte> buffer = stream.getBuffer();
+    std::vector<Byte> buffer = getBuffer();
     size_t sentBytes = 0;
     size_t sent;
 
@@ -78,7 +78,7 @@ bool FoxPeer::flushSend() {
             return false;
     } while((sentBytes += sent) != buffer.size());
 
-    stream.flush();
+    flush();
     return true;
 }
 
@@ -90,16 +90,12 @@ int FoxPeer::rawRecv(size_t sz) {
     if (rcvd == 0 || (SOCKETERROR(rcvd) && FN_ERRNO != FN_EWOULD))
         return 0;
 
-    stream.writeBytes(buf, rcvd);
+    writeBytes(buf, rcvd);
     return rcvd;
 }
 
 bool FoxPeer::isAlive() {
     return alive;
-}
-
-ByteStream* FoxPeer::getStream() {
-    return &stream;
 }
 
 void FoxPeer::setHndlerUData(void* udata) {
@@ -126,18 +122,18 @@ bool FoxPeer::step() {
             if (rawRecv(sizeof(PktID)) == 0)
                 return false;
 
-            stream.readByte(currentPkt);
+            readByte(currentPkt);
             pktSize = getPacketSize(currentPkt);
             break;
         default: {
             int rec;
-            int expectedRec = pktSize - stream.size();
+            int expectedRec = pktSize - buffer.size();
 
             // try to get our packet, if we fail return false
             if (expectedRec != 0 && (rec = rawRecv(expectedRec)) == 0)
                 return false;
 
-            if (pktSize == stream.size()) {
+            if (pktSize == buffer.size()) {
                 // dispatch Packet Handler
                 PktHandler hndlr = getPacketHandler(currentPkt);
                 if (hndlr != nullptr && getPacketType(currentPkt) == type) {

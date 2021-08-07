@@ -5,19 +5,18 @@
 
 void HANDLE_C2S_ADD(FoxNet::FoxPeer *peer, void *udata) {
     uint32_t a, b, res;
-    ByteStream *stream = peer->getStream();
 
-    stream->readUInt(a);
-    stream->readUInt(b);
-    stream->flush();
+    peer->readUInt(a);
+    peer->readUInt(b);
+    peer->flush();
 
     std::cout << "got (" << a << ", " << b << ")" << std::endl;
 
     // perform advanced intensive arithmatic operation for our client
     res = a + b;
 
-    stream->writeByte(S2C_NUM_RESPONSE);
-    stream->writeUInt(res);
+    peer->writeByte(S2C_NUM_RESPONSE);
+    peer->writeUInt(res);
 }
 
 int main() {

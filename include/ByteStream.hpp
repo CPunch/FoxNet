@@ -14,7 +14,7 @@ namespace FoxNet {
      * ByteStream, a simple first-in/first-out buffer
      */
     class ByteStream {
-    private:
+    protected:
         std::vector<Byte> buffer;
         bool flipEndian = false;
 

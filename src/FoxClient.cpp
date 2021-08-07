@@ -47,11 +47,11 @@ FoxClient::FoxClient(std::string ip, std::string port) {
     fd = {sock, POLLIN};
 
     // connection successful! send handshake
-    stream.writeData((PktID)C2S_HANDSHAKE);
-    stream.writeBytes((Byte*)FOXMAGIC, FOXMAGICLEN);
-    stream.writeByte(FOXNET_MAJOR);
-    stream.writeByte(FOXNET_MINOR);
-    stream.writeByte(isBigEndian());
+    writeData((PktID)C2S_HANDSHAKE);
+    writeBytes((Byte*)FOXMAGIC, FOXMAGICLEN);
+    writeByte(FOXNET_MAJOR);
+    writeByte(FOXNET_MINOR);
+    writeByte(isBigEndian());
     flushSend();
 }
 

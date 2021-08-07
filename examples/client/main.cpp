@@ -7,21 +7,18 @@ uint32_t a, b;
 
 void HANDLE_S2C_NUM_RESPONSE(FoxNet::FoxPeer *peer, void *udata) {
     uint32_t resp;
-    ByteStream *stream = peer->getStream();
 
-    stream->readUInt(resp);
-    stream->flush();
+    peer->readUInt(resp);
+    peer->flush();
 
     std::cout << "got result of " << resp << std::endl;
 }
 
 void onPeerReady(FoxNet::FoxPeer *peer) {
-    ByteStream *stream = peer->getStream();
-
     // write our addition request
-    stream->writeByte(C2S_REQ_ADD);
-    stream->writeUInt(a);
-    stream->writeUInt(b);
+    peer->writeByte(C2S_REQ_ADD);
+    peer->writeUInt(a);
+    peer->writeUInt(b);
 }
 
 int main() {

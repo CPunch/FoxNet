@@ -58,10 +58,9 @@ namespace FoxNet {
         PEEREVENT_MAX
     } PEEREVENT;
 
-    class FoxPeer {
+    class FoxPeer : public ByteStream {
     protected:
         EventCallback events[PEEREVENT_MAX];
-        ByteStream stream;
         bool alive = true;
         PktID currentPkt = PKTID_NONE;
         void *userdata = nullptr;
@@ -78,8 +77,6 @@ namespace FoxNet {
 
         bool callEvent(PEEREVENT id);
         bool isAlive();
-
-        ByteStream* getStream();
 
         void setHndlerUData(void*);
         void setEvent(PEEREVENT eventID, EventCallback callback);
