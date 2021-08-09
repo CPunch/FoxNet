@@ -25,9 +25,15 @@ void ByteStream::setFlipEndian(bool _e) {
     flipEndian = _e;
 }
 
-void ByteStream::readBytes(Byte *out, size_t sz) {
+bool ByteStream::readBytes(Byte *out, size_t sz) {
+    // make sure we can actually read that data :P
+    if (buffer.size() < sz)
+        return false;
+
     std::copy(buffer.begin(), buffer.begin() + sz, out);
     buffer.erase(buffer.begin(), buffer.begin() + sz);
+
+    return true;
 }
 
 void ByteStream::writeBytes(Byte *in, size_t sz) {

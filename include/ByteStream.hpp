@@ -30,19 +30,20 @@ namespace FoxNet {
         // note: this only has an effect if the integers are written or read using writeUInt() or readUInt()
         void setFlipEndian(bool);
 
-        void readBytes(Byte *out, size_t sz);
+        bool readBytes(Byte *out, size_t sz);
         void writeBytes(Byte *in, size_t sz);
 
         inline void writeByte(Byte in) {
             writeBytes(&in, 1);
         }
 
-        inline void readByte(Byte &out) {
-            readBytes(&out, 1);
+        inline bool readByte(Byte &out) {
+            return readBytes(&out, 1);
         }
 
         template <typename T>
-        void readUInt(T& data) {
+        bool readUInt(T& data) {
+            bool result;
             if (flipEndian) {
                 union {
                     T u;
@@ -50,7 +51,7 @@ namespace FoxNet {
                 } source, dest;
 
                 // read bytes into union to be swapped
-                readBytes(source.u8, sizeof(T));
+                result = readBytes(source.u8, sizeof(T));
 
                 // copy source to dest, flipping endian
                 for (size_t k = 0; k < sizeof(T); k++)
@@ -59,8 +60,10 @@ namespace FoxNet {
                 data = dest.u;
             } else {
                 // just read the data straight
-                readBytes((Byte*)&data, sizeof(T));
+                result = readBytes((Byte*)&data, sizeof(T));
             }
+
+            return result;
         }
 
         template <typename T>

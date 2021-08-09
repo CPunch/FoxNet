@@ -5,6 +5,9 @@
 #include "FoxNet.hpp"
 #include "ByteStream.hpp"
 
+// we allow packets in memory to be up to 4kb in size
+#define MAX_PACKET_SIZE 4096
+
 namespace FoxNet {
     class FoxPeer;
     typedef Byte PktID;
@@ -21,6 +24,8 @@ namespace FoxNet {
     */
     typedef enum {
         PKTID_NONE, // invalid packet ID, probably means we're waiting for a packet
+        // ======= SHARED PACKETS =======
+        PKTID_VAR_LENGTH, // uint32_t (pkt body size) & uint8_t (pkt ID) follows
         // ======= CLIENT TO SERVER PACKETS =======
         C2S_HANDSHAKE, // sends info like FoxNet version & endian flag
         // ======= SERVER TO CLIENT PACKETS =======

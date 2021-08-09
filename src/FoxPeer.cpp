@@ -119,12 +119,30 @@ void FoxPeer::kill() {
 bool FoxPeer::step() {
     switch(currentPkt) {
         case PKTID_NONE: // we're queued to receive a packet
-            if (rawRecv(sizeof(PktID)) == 0)
+            if (rawRecv(sizeof(PktID)) != sizeof(PktID))
                 return false;
 
             readByte(currentPkt);
             pktSize = getPacketSize(currentPkt);
             break;
+        case PKTID_VAR_LENGTH: {
+            if (pktSize == 0) {
+                uint32_t pSize;
+                // grab packet length
+                if (rawRecv(sizeof(uint32_t)) != sizeof(uint32_t))
+                    return false;
+
+                readUInt(pSize);
+                pktSize = pSize;
+            } else {
+                // after we have our size, the pkt ID is next
+                if (rawRecv(sizeof(PktID)) != sizeof(PktID))
+                    return false;
+
+                readByte(currentPkt);
+            }
+            break;
+        }
         default: {
             int rec;
             int expectedRec = pktSize - buffer.size();
@@ -139,6 +157,8 @@ bool FoxPeer::step() {
                 if (hndlr != nullptr && getPacketType(currentPkt) == type) {
                     hndlr(this, userdata);
                     flushSend();
+                } else {
+                    flush(); // we'll just ignore the packet
                 }
 
                 // reset
