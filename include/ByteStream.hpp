@@ -32,6 +32,7 @@ namespace FoxNet {
 
         bool readBytes(Byte *out, size_t sz);
         void writeBytes(Byte *in, size_t sz);
+        bool patchBytes(Byte *in, size_t sz, size_t indx);
 
         inline void writeByte(Byte in) {
             writeBytes(&in, 1);
@@ -74,7 +75,7 @@ namespace FoxNet {
                     Byte u8[sizeof(T)];
                 } source, dest;
 
-                // read bytes into union to be swapped
+                // copy uint into union to be swapped
                 source.u = data;
 
                 // copy source to dest, flipping endian
@@ -84,9 +85,35 @@ namespace FoxNet {
                 // write the result
                 writeBytes(dest.u8, sizeof(T));
             } else {
-                // just read the data straight
+                // just write the data straight
                 writeBytes((Byte*)&data, sizeof(T));
             }
+        }
+
+        template <typename T>
+        bool patchUInt(const T data, size_t indx) {
+            bool result;
+            if (flipEndian) {
+                union {
+                    T u;
+                    Byte u8[sizeof(T)];
+                } source, dest;
+
+                // copy uint into union to be swapped
+                source.u = data;
+
+                // copy source to dest, flipping endian
+                for (size_t k = 0; k < sizeof(T); k++)
+                    dest.u8[k] = source.u8[sizeof(T) - k - 1];
+
+                // patch the result
+                result = patchBytes(dest.u8, sizeof(T), indx);
+            } else {
+                // just patch the data straight
+                result = patchBytes((Byte*)&data, sizeof(T), indx);
+            }
+
+            return result;
         }
 
         template<typename T>

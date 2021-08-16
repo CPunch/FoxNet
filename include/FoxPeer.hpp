@@ -65,7 +65,7 @@ namespace FoxNet {
         PktID currentPkt = PKTID_NONE;
         void *userdata = nullptr;
         SOCKET sock;
-        size_t pktSize;
+        uint16_t pktSize;
 
         int rawRecv(size_t sz);
         bool flushSend();
@@ -74,6 +74,18 @@ namespace FoxNet {
         PEERTYPE type = PEER_CLIENT;
         FoxPeer();
         FoxPeer(SOCKET);
+
+        /*
+         * This should be called prior to writing packet data to the stream.
+         */
+        void prepareVarPacket(PktID id);
+
+        /* 
+         * After writing your variable-length packet to the stream, call this and it will patch the length.
+         * make sure you call this BEFORE SENDING YOUR PACKET! remember, flushSend() is called after each packet
+         * handler if there is data in the stream to send!
+         */
+        void patchVarPacket();
 
         bool callEvent(PEEREVENT id);
         bool isAlive();

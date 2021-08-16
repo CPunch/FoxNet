@@ -39,6 +39,24 @@ FoxPeer::FoxPeer(SOCKET _sock) {
         events[i] = nullptr;
 }
 
+void FoxPeer::prepareVarPacket(PktID id) {
+    uint16_t dummySize = 0;
+
+    // write our dummy size, this'll be overwritten by patchVarPacket
+    writeUInt(dummySize);
+
+    // then write our packet id
+    writeByte(id);
+}
+
+void FoxPeer::patchVarPacket() {
+    // get the size of the packet
+    uint16_t pSize = size() - sizeof(uint32_t) - sizeof(uint8_t);
+
+    // now patch the dummy size, (first 2 bytes)
+    patchUInt(pSize, 0);
+}
+
 bool FoxPeer::callEvent(PEEREVENT id) {
     EventCallback evnt = events[id];
 
@@ -127,13 +145,17 @@ bool FoxPeer::step() {
             break;
         case PKTID_VAR_LENGTH: {
             if (pktSize == 0) {
-                uint32_t pSize;
+                uint16_t pSize;
                 // grab packet length
-                if (rawRecv(sizeof(uint32_t)) != sizeof(uint32_t))
+                if (rawRecv(sizeof(uint16_t)) != sizeof(uint16_t))
                     return false;
 
                 readUInt(pSize);
                 pktSize = pSize;
+
+                // if they try sending a packet larger than MAX_PACKET_SIZE kill em'
+                if (pktSize > MAX_PACKET_SIZE)
+                    return false;
             } else {
                 // after we have our size, the pkt ID is next
                 if (rawRecv(sizeof(PktID)) != sizeof(PktID))

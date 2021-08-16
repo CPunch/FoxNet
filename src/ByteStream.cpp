@@ -39,3 +39,12 @@ bool ByteStream::readBytes(Byte *out, size_t sz) {
 void ByteStream::writeBytes(Byte *in, size_t sz) {
     buffer.insert(buffer.end(), &in[0], &in[sz]);
 }
+
+bool ByteStream::patchBytes(Byte *in, size_t sz, size_t indx) {
+    // sanity check
+    if (indx + 1 > buffer.size())
+        return false;
+
+    std::copy(in, in + sz, buffer.begin() + indx);
+    return false;
+}
