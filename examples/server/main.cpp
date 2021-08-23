@@ -3,7 +3,17 @@
 
 #include <iostream>
 
-void HANDLE_C2S_ADD(FoxNet::FoxPeer *peer, void *udata) {
+class ExamplePeer : public FoxServerPeer {
+private:
+    DEF_FOXNET_PACKET(C2S_REQ_ADD);
+
+public:
+    ExamplePeer(SOCKET sock): FoxServerPeer(sock) {
+        INIT_FOXNET_PACKET(C2S_REQ_ADD, sizeof(uint32_t) + sizeof(uint32_t))
+    }
+};
+
+DECLARE_FOXNET_PACKET(C2S_REQ_ADD, ExamplePeer) {
     uint32_t a, b, res;
 
     peer->readUInt(a);
@@ -20,9 +30,8 @@ void HANDLE_C2S_ADD(FoxNet::FoxPeer *peer, void *udata) {
 }
 
 int main() {
-    FoxNet::FoxServer server(1337);
+    FoxNet::FoxServer<ExamplePeer> server(1337);
 
-    FoxNet::registerUserPacket(C2S_REQ_ADD, HANDLE_C2S_ADD, PEER_SERVER, sizeof(uint32_t) + sizeof(uint32_t));
     while(1) {
         server.pollPeers(4000);
         std::cout << server.getPeerList().size() << " peers connected" << std::endl;

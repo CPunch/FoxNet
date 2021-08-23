@@ -6,7 +6,9 @@ using namespace FoxNet;
 
 FoxClient::FoxClient(std::string ip, std::string port) {
     struct addrinfo res, *result;
-    type = PEER_CLIENT;
+
+    // setup packet ids
+    INIT_FOXNET_PACKET(S2C_HANDSHAKE, (sizeof(Byte) + FOXMAGICLEN))
 
     // zero out our address info and setup the type
     memset(&res, 0, sizeof(addrinfo));
@@ -57,6 +59,19 @@ FoxClient::FoxClient(std::string ip, std::string port) {
 
 FoxClient::~FoxClient() {
     kill();
+}
+
+DECLARE_FOXNET_PACKET(S2C_HANDSHAKE, FoxClient) {
+    char magic[FOXMAGICLEN];
+    Byte response;
+
+    peer->readBytes((Byte*)magic, FOXMAGICLEN);
+    peer->readByte(response);
+    peer->flush();
+
+    std::cout << "got handshake response : " << (response ? "accepted!" : "failed!") << std::endl;
+
+    peer->onReady();
 }
 
 void FoxClient::pollPeer(int timeout) {

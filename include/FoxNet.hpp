@@ -1,6 +1,7 @@
 #pragma once
 
 #include <iostream>
+#include <cstring>
 
 #define FOXFATAL(x) \
     std::cerr << "[FATAL] FoxNet: " << x << std::endl; \

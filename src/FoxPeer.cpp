@@ -28,15 +28,15 @@ bool FoxNet::setSockNonblocking(SOCKET sock) {
 using namespace FoxNet;
 
 FoxPeer::FoxPeer() {
-    for (int i = 0; i < PEEREVENT_MAX; i++)
-        events[i] = nullptr;
+    for (int i = 0; i < UINT8_MAX; i++)
+        PKTMAP[i] = PacketInfo(nullptr, 0);
 }
 
 FoxPeer::FoxPeer(SOCKET _sock) {
     sock = _sock;
 
-    for (int i = 0; i < PEEREVENT_MAX; i++)
-        events[i] = nullptr;
+    for (int i = 0; i < UINT8_MAX; i++)
+        PKTMAP[i] = PacketInfo(nullptr, 0);
 }
 
 void FoxPeer::prepareVarPacket(PktID id) {
@@ -57,21 +57,6 @@ void FoxPeer::patchVarPacket() {
     patchUInt(pSize, 0);
 }
 
-bool FoxPeer::callEvent(PEEREVENT id) {
-    EventCallback evnt = events[id];
-
-    if (evnt != nullptr) {
-        evnt(this);
-        return true;
-    }
-
-    return false;
-}
-
-void FoxPeer::setEvent(PEEREVENT id, EventCallback evnt) {
-    events[id] = evnt;
-}
-
 bool FoxPeer::flushSend() {
     std::vector<Byte> buffer = getBuffer();
     size_t sentBytes = 0;
@@ -81,11 +66,15 @@ bool FoxPeer::flushSend() {
     if (buffer.size() == 0)
         return true;
 
-    /*for (size_t i = 0; i < buffer.size(); i++) {
+    /*std::cout << "sending " << buffer.size() << " bytes..." << std::endl;
+
+    for (size_t i = 0; i < buffer.size(); i++) {
         std::cout << "0x" << std::hex << std::setw(2) << std::setfill('0') << (int)buffer[i] << std::dec << " ";
         if ((i+1) % 8 == 0)
             std::cout << std::endl;
-    }*/
+    }
+
+    std::cout << std::endl;*/
 
     // write bytes to the socket until an error occurs or we finish reading
     do {
@@ -104,6 +93,15 @@ int FoxPeer::rawRecv(size_t sz) {
     Byte buf[sz];
     size_t rcvd = read(sock, (buffer_t*)(buf), sz);
 
+    /*for (size_t i = 0; i < sz; i++) {
+        std::cout << "0x" << std::hex << std::setw(2) << std::setfill('0') << (int)buf[i] << std::dec << " ";
+        if ((i+1) % 8 == 0)
+            std::cout << std::endl;
+    }*/
+
+    std::cout << std::endl;
+
+
     // if the socket closed or an error occured, return the error result
     if (rcvd == 0 || (SOCKETERROR(rcvd) && FN_ERRNO != FN_EWOULD))
         return 0;
@@ -112,12 +110,20 @@ int FoxPeer::rawRecv(size_t sz) {
     return rcvd;
 }
 
-bool FoxPeer::isAlive() {
-    return alive;
+PktHandler FoxPeer::getPacketHandler(PktID id) {
+    return PKTMAP[id].handler;
 }
 
-void FoxPeer::setHndlerUData(void* udata) {
-    userdata = udata;
+PktSize FoxPeer::getPacketSize(PktID id) {
+    return PKTMAP[id].pSize;
+}
+
+void FoxPeer::onReady() {
+    // stubbed
+}
+
+bool FoxPeer::isAlive() {
+    return alive;
 }
 
 void FoxPeer::kill() {
@@ -145,9 +151,9 @@ bool FoxPeer::step() {
             break;
         case PKTID_VAR_LENGTH: {
             if (pktSize == 0) {
-                uint16_t pSize;
+                PktSize pSize;
                 // grab packet length
-                if (rawRecv(sizeof(uint16_t)) != sizeof(uint16_t))
+                if (rawRecv(sizeof(PktSize)) != sizeof(PktSize))
                     return false;
 
                 readUInt(pSize);
@@ -176,8 +182,8 @@ bool FoxPeer::step() {
             if (pktSize == buffer.size()) {
                 // dispatch Packet Handler
                 PktHandler hndlr = getPacketHandler(currentPkt);
-                if (hndlr != nullptr && getPacketType(currentPkt) == type) {
-                    hndlr(this, userdata);
+                if (hndlr != nullptr) {
+                    hndlr(this);
                     flushSend();
                 } else {
                     flush(); // we'll just ignore the packet

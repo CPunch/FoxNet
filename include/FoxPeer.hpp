@@ -43,35 +43,32 @@
 #include "ByteStream.hpp"
 #include "FoxPacket.hpp"
 
+
+#define FOXNET_PACKET_HANDLER(ID) HANDLER_##ID
+#define DEF_FOXNET_PACKET(ID) static void FOXNET_PACKET_HANDLER(ID)(FoxPeer *peer);
+#define DECLARE_FOXNET_PACKET(ID, className) void className::FOXNET_PACKET_HANDLER(ID)(FoxPeer *peer)
+#define INIT_FOXNET_PACKET(ID, sz) PKTMAP[ID] = PacketInfo(FOXNET_PACKET_HANDLER(ID), sz);
+
 namespace FoxNet {
     bool setSockNonblocking(SOCKET sock);
 
-    typedef enum {
-        PEER_CLIENT,
-        PEER_SERVER
-    } PEERTYPE;
-
-    typedef void (*EventCallback)(FoxPeer *peer);
-
-    typedef enum {
-        PEEREVENT_ONREADY, /* for PEER_CLIENT this is fired whenever the handshake response is accepted */
-        PEEREVENT_MAX
-    } PEEREVENT;
-
     class FoxPeer : public ByteStream {
-    protected:
-        EventCallback events[PEEREVENT_MAX];
-        bool alive = true;
+    private:
         PktID currentPkt = PKTID_NONE;
-        void *userdata = nullptr;
+        PktSize pktSize;
+        bool alive = true;
+
+    protected:
+        PacketInfo PKTMAP[UINT8_MAX+1];
         SOCKET sock;
-        uint16_t pktSize;
 
         int rawRecv(size_t sz);
         bool flushSend();
 
+        PktSize getPacketSize(PktID);
+        PktHandler getPacketHandler(PktID);
+
     public:
-        PEERTYPE type = PEER_CLIENT;
         FoxPeer();
         FoxPeer(SOCKET);
 
@@ -87,11 +84,10 @@ namespace FoxNet {
          */
         void patchVarPacket();
 
-        bool callEvent(PEEREVENT id);
-        bool isAlive();
+        // events
+        virtual void onReady();
 
-        void setHndlerUData(void*);
-        void setEvent(PEEREVENT eventID, EventCallback callback);
+        bool isAlive();
 
         void kill();
         bool step();
