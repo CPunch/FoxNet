@@ -97,9 +97,9 @@ int FoxPeer::rawRecv(size_t sz) {
         std::cout << "0x" << std::hex << std::setw(2) << std::setfill('0') << (int)buf[i] << std::dec << " ";
         if ((i+1) % 8 == 0)
             std::cout << std::endl;
-    }*/
+    }
 
-    std::cout << std::endl;
+    std::cout << std::endl;*/
 
 
     // if the socket closed or an error occured, return the error result
@@ -122,6 +122,10 @@ void FoxPeer::onReady() {
     // stubbed
 }
 
+void FoxPeer::onKilled() {
+    // stubbed
+}
+
 bool FoxPeer::isAlive() {
     return alive;
 }
@@ -138,6 +142,9 @@ void FoxPeer::kill() {
     shutdown(sock, SHUT_RDWR);
     close(sock);
 #endif
+
+    // fire our event
+    onKilled();
 }
 
 bool FoxPeer::step() {

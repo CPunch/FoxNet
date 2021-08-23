@@ -30,7 +30,6 @@ DECLARE_FOXNET_PACKET(C2S_HANDSHAKE, FoxServerPeer) {
     // if our endians are different, set the peer to flip the endians!
     peer->setFlipEndian(endian != isBigEndian());
 
-    std::cout << "Got handshake : (" << magic << ") " << (int)major << "." << (int)minor << " flip endian : " << (endian != isBigEndian() ? "TRUE" : "FALSE") << std::endl;
     response = !memcmp(magic, FOXMAGIC, FOXMAGICLEN) && major == FOXNET_MAJOR;
 
     // now respond

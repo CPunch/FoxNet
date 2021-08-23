@@ -69,9 +69,10 @@ DECLARE_FOXNET_PACKET(S2C_HANDSHAKE, FoxClient) {
     peer->readByte(response);
     peer->flush();
 
-    std::cout << "got handshake response : " << (response ? "accepted!" : "failed!") << std::endl;
-
-    peer->onReady();
+    if (response)
+        peer->onReady();
+    else
+        peer->kill();
 }
 
 void FoxClient::pollPeer(int timeout) {
@@ -92,8 +93,6 @@ void FoxClient::pollPeer(int timeout) {
     }
 
     // try steping, if there was an error handling a packet, kill the connection!
-    if (!step()) {
-        std::cerr << "packet error! errno. " << FN_ERRNO << std::endl;
+    if (!step())
         kill();
-    }
 }

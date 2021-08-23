@@ -15,6 +15,7 @@ public:
     }
 
     void onReady() {
+        std::cout << "handshake accepted!" << std::endl;
         // write our addition request
         writeByte(C2S_REQ_ADD);
         writeUInt<uint32_t>(12);

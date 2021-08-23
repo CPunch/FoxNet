@@ -85,7 +85,8 @@ namespace FoxNet {
         void patchVarPacket();
 
         // events
-        virtual void onReady();
+        virtual void onReady(); // fired when we got a handshake response from the server and it went well :)
+        virtual void onKilled(); // fired when we have been killed (peer disconnect)
 
         bool isAlive();
 
