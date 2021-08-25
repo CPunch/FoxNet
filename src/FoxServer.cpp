@@ -31,8 +31,6 @@ DECLARE_FOXNET_PACKET(C2S_HANDSHAKE, FoxServerPeer) {
 
     response = !memcmp(magic, FOXMAGIC, FOXMAGICLEN) && major == FOXNET_MAJOR;
 
-    std::cout << "c2s_handshake called" << std::endl;
-
     // now respond
     peer->writeByte(S2C_HANDSHAKE);
     peer->writeBytes((Byte*)magic, FOXMAGICLEN);
