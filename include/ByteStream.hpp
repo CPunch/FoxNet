@@ -11,20 +11,25 @@ namespace FoxNet {
     typedef unsigned char Byte;
 
     /*
-     * ByteStream, a simple first-in/first-out buffer
+     * ByteStream
      */
     class ByteStream {
     protected:
-        std::vector<Byte> buffer;
+        std::vector<Byte> inBuffer; // all read operations operate on this buffer
+        std::vector<Byte> outBuffer; // all write operations operate on this buffer
         bool flipEndian = false;
+
+        void rawWriteIn(Byte *in, size_t sz); // write to the in buffer
 
     public:
         ByteStream();
-        ByteStream(std::vector<Byte>& raw);
 
-        std::vector<Byte>& getBuffer();
-        void flush(); // clears the buffer
-        size_t size();
+        std::vector<Byte>& getOutBuffer();
+        std::vector<Byte>& getInBuffer();
+        void flushOut(); // clears the out (write()) buffer
+        void flushIn(); // clears the in (read()) buffer
+        size_t sizeOut(); // size of the out (write()) buffer
+        size_t sizeIn(); // size of the in (read()) buffer
 
         // if set to true, integers read and written will be automatically flipped to the opposite endian-ness
         // note: this only has an effect if the integers are written or read using writeUInt() or readUInt()

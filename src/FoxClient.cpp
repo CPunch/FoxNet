@@ -67,7 +67,6 @@ DECLARE_FOXNET_PACKET(S2C_HANDSHAKE, FoxClient) {
 
     peer->readBytes((Byte*)magic, FOXMAGICLEN);
     peer->readByte(response);
-    peer->flush();
 
     if (response)
         peer->onReady();
@@ -78,6 +77,11 @@ DECLARE_FOXNET_PACKET(S2C_HANDSHAKE, FoxClient) {
 void FoxClient::pollPeer(int timeout) {
     if (!isAlive()) {
         FOXWARN("pollPeer() called on a dead connection!");
+        return;
+    }
+
+    if (sizeOut() > 0 && !flushSend()) {
+        kill();
         return;
     }
 

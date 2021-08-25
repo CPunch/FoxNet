@@ -18,7 +18,6 @@ DECLARE_FOXNET_PACKET(C2S_REQ_ADD, ExamplePeer) {
 
     peer->readUInt(a);
     peer->readUInt(b);
-    peer->flush();
 
     std::cout << "got (" << a << ", " << b << ")" << std::endl;
 

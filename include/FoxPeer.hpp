@@ -63,7 +63,6 @@ namespace FoxNet {
         SOCKET sock;
 
         int rawRecv(size_t sz);
-        bool flushSend();
 
         PktSize getPacketSize(PktID);
         PktHandler getPacketHandler(PktID);
@@ -74,15 +73,16 @@ namespace FoxNet {
 
         /*
          * This should be called prior to writing packet data to the stream.
+         * returns: start index of the var packet, pass this result to patchVarPacket()
          */
-        void prepareVarPacket(PktID id);
+        size_t prepareVarPacket(PktID id);
 
         /* 
          * After writing your variable-length packet to the stream, call this and it will patch the length.
          * make sure you call this BEFORE SENDING YOUR PACKET! remember, flushSend() is called after each packet
          * handler if there is data in the stream to send!
          */
-        void patchVarPacket();
+        void patchVarPacket(size_t indx);
 
         // events
         virtual void onReady(); // fired when we got a handshake response from the server and it went well :)
@@ -92,5 +92,6 @@ namespace FoxNet {
 
         void kill();
         bool step();
+        bool flushSend();
     };
 }

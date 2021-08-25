@@ -39,26 +39,29 @@ FoxPeer::FoxPeer(SOCKET _sock) {
         PKTMAP[i] = PacketInfo(nullptr, 0);
 }
 
-void FoxPeer::prepareVarPacket(PktID id) {
+size_t FoxPeer::prepareVarPacket(PktID id) {
     uint16_t dummySize = 0;
+    size_t indx = sizeOut();
 
     // write our dummy size, this'll be overwritten by patchVarPacket
     writeUInt(dummySize);
 
     // then write our packet id
     writeByte(id);
+
+    return indx;
 }
 
-void FoxPeer::patchVarPacket() {
+void FoxPeer::patchVarPacket(size_t indx) {
     // get the size of the packet
-    uint16_t pSize = size() - sizeof(uint32_t) - sizeof(uint8_t);
+    uint16_t pSize = sizeOut() - sizeof(uint32_t) - sizeof(uint8_t) - indx;
 
     // now patch the dummy size, (first 2 bytes)
-    patchUInt(pSize, 0);
+    patchUInt(pSize, indx);
 }
 
 bool FoxPeer::flushSend() {
-    std::vector<Byte> buffer = getBuffer();
+    std::vector<Byte> buffer = getOutBuffer();
     size_t sentBytes = 0;
     size_t sent;
 
@@ -85,7 +88,7 @@ bool FoxPeer::flushSend() {
             return false;
     } while((sentBytes += sent) != buffer.size());
 
-    flush();
+    flushOut();
     return true;
 }
 
@@ -93,7 +96,9 @@ int FoxPeer::rawRecv(size_t sz) {
     Byte buf[sz];
     size_t rcvd = read(sock, (buffer_t*)(buf), sz);
 
-    /*for (size_t i = 0; i < sz; i++) {
+    /*std::cout << "recieved " << sz << " bytes" << std::endl;
+
+    for (size_t i = 0; i < sz; i++) {
         std::cout << "0x" << std::hex << std::setw(2) << std::setfill('0') << (int)buf[i] << std::dec << " ";
         if ((i+1) % 8 == 0)
             std::cout << std::endl;
@@ -106,7 +111,7 @@ int FoxPeer::rawRecv(size_t sz) {
     if (rcvd == 0 || (SOCKETERROR(rcvd) && FN_ERRNO != FN_EWOULD))
         return 0;
 
-    writeBytes(buf, rcvd);
+    rawWriteIn(buf, rcvd);
     return rcvd;
 }
 
@@ -180,20 +185,20 @@ bool FoxPeer::step() {
         }
         default: {
             int rec;
-            int expectedRec = pktSize - buffer.size();
+            int expectedRec = pktSize - sizeIn();
 
             // try to get our packet, if we fail return false
             if (expectedRec != 0 && (rec = rawRecv(expectedRec)) == 0)
                 return false;
 
-            if (pktSize == buffer.size()) {
+            if (pktSize == sizeIn()) {
                 // dispatch Packet Handler
                 PktHandler hndlr = getPacketHandler(currentPkt);
                 if (hndlr != nullptr) {
                     hndlr(this);
                     flushSend();
                 } else {
-                    flush(); // we'll just ignore the packet
+                    flushIn(); // we'll just ignore the packet
                 }
 
                 // reset

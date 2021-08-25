@@ -85,7 +85,7 @@ namespace FoxNet {
 
         ~FoxServer() {
             for (auto pair : peers) {
-                FoxPeer *peer = pair.second;
+                peerType *peer = pair.second;
                 peer->kill();
                 delete peer;
             }
@@ -93,6 +93,28 @@ namespace FoxNet {
 
         // timeout in ms, if timeout is -1 poll() will block
         void pollPeers(int timeout) {
+            // check if we have any queued outgoing packets
+            for (int i = 0; i < fds.size(); i++) {
+                auto pollIter = fds.begin() + i;
+                auto pIter = peers.find((*pollIter).fd);
+                peerType *peer = (*pIter).second;
+
+                if (pIter == peers.end()) // its probably just our listener socket
+                    continue;
+ 
+                if (peer->sizeOut() > 0 && !peer->flushSend()) { // check if we have any outgoing packets, and if we failed to send, remove the peer
+                    onPeerDisconnect(peer);
+
+                    // remove peer from the fds vector and the peers map
+                    fds.erase(pollIter);
+                    peers.erase(pIter);
+
+                    // free peer & decrement i
+                    delete peer;
+                    i--;
+                }
+            }
+
             // poll() blocks until there's an event to be handled on a file descriptor in the pollfd* list passed. 
             int events = poll(fds.data(), fds.size(), timeout); // poll returns -1 for error, or the number of events
             if (SOCKETERROR(events)) {
@@ -160,12 +182,12 @@ namespace FoxNet {
                 if (fd.revents & ~POLLIN) {
         _rmvPeer:
                     onPeerDisconnect(peer);
-                    // free peer & remove it from the map
-                    delete peer;
+                    // remove peer from the map & the fds vector
                     peers.erase(pIter);
-
-                    // erases from the fds vector, decrements i so we'll be on the right iterator next iteration
                     fds.erase(iter);
+
+                    // free's peer & decrements i so we'll be on the right iterator next iteration
+                    delete peer;
                     i--;
                     continue;
                 } else if (!peer->step()) { // error occured on socket

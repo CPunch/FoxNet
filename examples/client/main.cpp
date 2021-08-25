@@ -27,7 +27,6 @@ DECLARE_FOXNET_PACKET(S2C_NUM_RESPONSE, ExampleClient) {
     uint32_t resp;
 
     peer->readUInt(resp);
-    peer->flush();
 
     std::cout << "got result of " << resp << std::endl;
 }
