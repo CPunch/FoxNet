@@ -102,7 +102,7 @@ namespace FoxNet {
                 if (pIter == peers.end()) // its probably just our listener socket
                     continue;
  
-                if (peer->sizeOut() > 0 && !peer->flushSend()) { // check if we have any outgoing packets, and if we failed to send, remove the peer
+                if (!peer->sendStep()) { // check if we have any outgoing packets, and if we failed to send, remove the peer
                     onPeerDisconnect(peer);
 
                     // remove peer from the fds vector and the peers map
@@ -178,9 +178,13 @@ namespace FoxNet {
 
                 peerType *peer = (*pIter).second;
 
-                // it's an error if it's not a POLLIN event
-                if (fd.revents & ~POLLIN) {
-        _rmvPeer:
+                if (fd.revents & POLLIN) { // is there data waiting to be read?
+                    if (!peer->recvStep()) { // error occured on socket
+                        peer->kill();
+                        goto _rmvPeer;
+                    }
+                } else { // peer disconnected or error occured, just remove the peer
+                _rmvPeer:
                     onPeerDisconnect(peer);
                     // remove peer from the map & the fds vector
                     peers.erase(pIter);
@@ -190,10 +194,9 @@ namespace FoxNet {
                     delete peer;
                     i--;
                     continue;
-                } else if (!peer->step()) { // error occured on socket
-                    peer->kill();
-                    goto _rmvPeer;
                 }
+
+                (*iter).revents = 0;
             }
         }
 

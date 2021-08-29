@@ -1,5 +1,5 @@
 #include "FoxClient.hpp"
-#include "../shared/UserPackets.hpp"
+#include "../ArithShared/UserPackets.hpp"
 
 #include <iostream>
 

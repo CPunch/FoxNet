@@ -80,7 +80,7 @@ void FoxClient::pollPeer(int timeout) {
         return;
     }
 
-    if (sizeOut() > 0 && !flushSend()) {
+    if (!sendStep()) {
         kill();
         return;
     }
@@ -91,12 +91,14 @@ void FoxClient::pollPeer(int timeout) {
         FOXFATAL("poll() failed!");
     }
 
-    // if it wasn't a POLLIN, it was an error :/
+    // if it wasn't a POLLIN, it was an error or socket hangup
     if (fd.revents & ~POLLIN) {
         FOXFATAL("error on client socket!");
     }
 
     // try steping, if there was an error handling a packet, kill the connection!
-    if (!step())
+    if (fd.revents & POLLIN && !recvStep())
         kill();
+
+    fd.revents = 0;
 }

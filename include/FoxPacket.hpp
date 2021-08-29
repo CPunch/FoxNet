@@ -27,6 +27,9 @@ namespace FoxNet {
         PKTID_NONE, // invalid packet ID, probably means we're waiting for a packet
         // ======= SHARED PACKETS =======
         PKTID_VAR_LENGTH, // uint32_t (pkt body size) & uint8_t (pkt ID) follows
+        PKTID_CONTENTSTREAM_REQUEST, // requests to open a content stream [uint32_t content size] [uint16_t content id] [uint8_t type] [sha256 hash]
+        PKTID_CONTENTSTREAM_STATUS, // sends update information regarding a content stream [uint16_t content id] [uint8_t CONTENTSTATUS]
+        PKTID_CONTENTSTREAM_CHUNK, // [var-length] [uint16_t content id] [content]
         // ======= CLIENT TO SERVER PACKETS =======
         C2S_HANDSHAKE, // sends info like FoxNet version & endian flag
         // ======= SERVER TO CLIENT PACKETS =======
@@ -35,13 +38,17 @@ namespace FoxNet {
     } PEER_PACKET_ID;
 
     typedef void (*PktHandler)(FoxPeer *peer);
+    typedef void (*PktVarHandler)(FoxPeer *peer, PktSize size);
 
     struct PacketInfo {
-        PktHandler handler;
-        PktSize pSize;
+        union {
+            PktHandler handler;
+            PktVarHandler varhandler;
+        };
+        PktSize size;
+        bool variable; // is a variable length packet?
 
-        PacketInfo(): handler(nullptr), pSize(0) {}
-        PacketInfo(PktHandler h, size_t sz): handler(h), pSize(sz) {}
+        PacketInfo(): handler(nullptr), size(0), variable(false) {}
     };
 
     inline bool isBigEndian() {
