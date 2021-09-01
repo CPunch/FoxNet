@@ -91,8 +91,26 @@ namespace FoxNet {
             }
         }
 
-        // timeout in ms, if timeout is -1 poll() will block
-        void pollPeers(int timeout) {
+        // used for connection keep-alive, actual packet will be sent on the next call to pollPeers()
+        void pingPeers() {
+            int64_t currTime = getTimestamp();
+
+            // check if we have any queued outgoing packets
+            for (int i = 0; i < fds.size(); i++) {
+                auto pollIter = fds.begin() + i;
+                auto pIter = peers.find((*pollIter).fd);
+                peerType *peer = (*pIter).second;
+
+                if (pIter == peers.end()) // its probably just our listener socket
+                    continue;
+ 
+                peer->writeByte(PKTID_PING);
+                peer->writeInt(currTime);
+            }
+        }
+
+        // timeout in ms, if timeout is -1 poll() will block. returns true if an event was processed, or false if the timeout was triggered
+        bool pollPeers(int timeout) {
             // check if we have any queued outgoing packets
             for (int i = 0; i < fds.size(); i++) {
                 auto pollIter = fds.begin() + i;
@@ -120,6 +138,9 @@ namespace FoxNet {
             if (SOCKETERROR(events)) {
                 FOXFATAL("poll() failed!");
             }
+
+            if (events == 0)
+                return false;
 
             // walk through our fds vector, and only run the event on the sockets that require attention
             for (int i = 0; i < fds.size() && events > 0; ++i) {
@@ -198,6 +219,8 @@ namespace FoxNet {
 
                 (*iter).revents = 0;
             }
+
+            return true;
         }
 
         std::map<SOCKET, peerType*>& getPeerList() {

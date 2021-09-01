@@ -29,7 +29,8 @@ int main() {
     FoxNet::FoxServer<ExamplePeer> server(23337);
 
     while(1) {
-        server.pollPeers(500);
+        server.pollPeers(1000);
+        server.pingPeers();
     }
 
     return 0;

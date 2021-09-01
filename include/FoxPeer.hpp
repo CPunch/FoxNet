@@ -91,6 +91,8 @@ namespace FoxNet {
         bool alive = true;
         uint16_t contentID = 0;
 
+        DEF_FOXNET_PACKET(PKTID_PING)
+        DEF_FOXNET_PACKET(PKTID_PONG)
         DEF_FOXNET_PACKET(PKTID_CONTENTSTREAM_REQUEST)
         DEF_FOXNET_PACKET(PKTID_CONTENTSTREAM_STATUS)
         DEF_FOXNET_VAR_PACKET(PKTID_CONTENTSTREAM_CHUNK)
@@ -135,6 +137,8 @@ namespace FoxNet {
         virtual void onReady(); // fired when we got a handshake response from the server and it went well :)
         virtual void onKilled(); // fired when we have been killed (peer disconnect)
         virtual void onStep(); // fired when sendStep() is called
+        virtual void onPing(int64_t peerTime, int64_t currTime); // fired when PKTID_PING is received
+        virtual void onPong(int64_t peerTime, int64_t currTime); // fired when PKTID_PONG is received
         virtual bool onContentRequest(uint8_t type, const ContentInfo content); // fired whenever a PKTID_CONTENTSTREAM_REQUEST is received, if this returns true the content is accepted
         virtual void onContentReceived(const ContentInfo content); // fired after the whole content was received
         virtual void onContentSent(const ContentInfo content); // fired after content has completed being sent

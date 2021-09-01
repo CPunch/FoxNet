@@ -32,7 +32,7 @@ namespace FoxNet {
         size_t sizeIn(); // size of the in (read()) buffer
 
         // if set to true, integers read and written will be automatically flipped to the opposite endian-ness
-        // note: this only has an effect if the integers are written or read using writeUInt() or readUInt()
+        // note: this only has an effect if the integers are written or read using writeInt() or readInt()
         void setFlipEndian(bool);
 
         bool readBytes(Byte *out, size_t sz);
@@ -48,7 +48,7 @@ namespace FoxNet {
         }
 
         template <typename T>
-        bool readUInt(T& data) {
+        bool readInt(T& data) {
             bool result;
             if (flipEndian) {
                 union {
@@ -73,7 +73,7 @@ namespace FoxNet {
         }
 
         template <typename T>
-        void writeUInt(const T data) {
+        void writeInt(const T data) {
             if (flipEndian) {
                 union {
                     T u;
@@ -96,7 +96,7 @@ namespace FoxNet {
         }
 
         template <typename T>
-        bool patchUInt(const T data, size_t indx) {
+        bool patchInt(const T data, size_t indx) {
             bool result;
             if (flipEndian) {
                 union {

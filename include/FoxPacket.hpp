@@ -1,6 +1,7 @@
 #pragma once
 
 #include <map>
+#include <chrono>
 
 #include "FoxNet.hpp"
 #include "ByteStream.hpp"
@@ -25,11 +26,13 @@ namespace FoxNet {
     */
     typedef enum {
         PKTID_NONE, // invalid packet ID, probably means we're waiting for a packet
-        // ======= SHARED PACKETS =======
+        // ======= PEER TO PEER PACKETS =======
         PKTID_VAR_LENGTH, // uint32_t (pkt body size) & uint8_t (pkt ID) follows
         PKTID_CONTENTSTREAM_REQUEST, // requests to open a content stream [uint32_t content size] [uint16_t content id] [uint8_t type] [sha256 hash]
         PKTID_CONTENTSTREAM_STATUS, // sends update information regarding a content stream [uint16_t content id] [uint8_t CONTENTSTATUS]
         PKTID_CONTENTSTREAM_CHUNK, // [var-length] [uint16_t content id] [content]
+        PKTID_PING,
+        PKTID_PONG, // (sent in response to PKTID_PING)
         // ======= CLIENT TO SERVER PACKETS =======
         C2S_HANDSHAKE, // sends info like FoxNet version & endian flag
         // ======= SERVER TO CLIENT PACKETS =======
@@ -58,5 +61,9 @@ namespace FoxNet {
         } _indxint = {0xDEADB33F};
 
         return _indxint.c[0] == 0xDE;
+    }
+
+    inline int64_t getTimestamp() {
+        return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     }
 }

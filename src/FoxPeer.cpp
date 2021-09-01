@@ -28,6 +28,8 @@ bool FoxNet::setSockNonblocking(SOCKET sock) {
 using namespace FoxNet;
 
 void FoxPeer::_setupPackets() {
+    INIT_FOXNET_PACKET(PKTID_PING, sizeof(int64_t))
+    INIT_FOXNET_PACKET(PKTID_PONG, sizeof(int64_t))
     INIT_FOXNET_PACKET(PKTID_CONTENTSTREAM_REQUEST, sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint8_t) + 32)
     INIT_FOXNET_PACKET(PKTID_CONTENTSTREAM_STATUS, sizeof(uint16_t) + sizeof(uint8_t))
     INIT_FOXNET_VAR_PACKET(PKTID_CONTENTSTREAM_CHUNK)
@@ -39,6 +41,27 @@ uint16_t FoxPeer::findNextContentID() {
 
 // ============== CONTENTSTREAM PACKET DECLARATIONS ==============
 
+DECLARE_FOXNET_PACKET(PKTID_PING, FoxPeer) {
+    int64_t peerTime;
+    int64_t currTime = getTimestamp();
+
+    peer->readInt<int64_t>(peerTime);
+
+    peer->writeByte(PKTID_PONG);
+    peer->writeInt<int64_t>(currTime);
+
+    peer->onPing(peerTime, currTime);
+}
+
+DECLARE_FOXNET_PACKET(PKTID_PONG, FoxPeer) {
+    int64_t peerTime;
+    int64_t currTime = getTimestamp();
+
+    peer->readInt<int64_t>(peerTime);
+
+    peer->onPong(peerTime, currTime);
+}
+
 DECLARE_FOXNET_PACKET(PKTID_CONTENTSTREAM_REQUEST, FoxPeer) {
     sha2::sha256_hash hash;
     ContentInfo cIn;
@@ -48,7 +71,7 @@ DECLARE_FOXNET_PACKET(PKTID_CONTENTSTREAM_REQUEST, FoxPeer) {
     uint8_t resp = CS_READY;
 
     // grab the size
-    peer->readUInt<uint32_t>(sz);
+    peer->readInt<uint32_t>(sz);
 
     if (sz > CONTENTSTREAM_MAX_SIZE) {
         resp = CS_TOOBIG;
@@ -56,7 +79,7 @@ DECLARE_FOXNET_PACKET(PKTID_CONTENTSTREAM_REQUEST, FoxPeer) {
     }
 
     // grab the id
-    peer->readUInt<uint16_t>(id);
+    peer->readInt<uint16_t>(id);
 
     // grab the type
     peer->readByte(type);
@@ -82,7 +105,7 @@ DECLARE_FOXNET_PACKET(PKTID_CONTENTSTREAM_REQUEST, FoxPeer) {
 _csReqResponse:
     // respond
     peer->writeByte(PKTID_CONTENTSTREAM_STATUS);
-    peer->writeUInt<uint16_t>(id);
+    peer->writeInt<uint16_t>(id);
     peer->writeByte(resp);
 }
 
@@ -91,7 +114,7 @@ DECLARE_FOXNET_PACKET(PKTID_CONTENTSTREAM_STATUS, FoxPeer) {
     uint8_t status;
 
     // grab the id
-    peer->readUInt<uint16_t>(id);
+    peer->readInt<uint16_t>(id);
 
     // grab the status
     peer->readByte(status);
@@ -125,9 +148,9 @@ DECLARE_FOXNET_PACKET(PKTID_CONTENTSTREAM_STATUS, FoxPeer) {
 
             // write packet to stream
             peer->writeByte(PKTID_CONTENTSTREAM_REQUEST);
-            peer->writeUInt<uint32_t>(cachedInfo.size);
-            peer->writeUInt<uint16_t>(id);
-            peer->writeUInt<uint8_t>(cachedInfo.type);
+            peer->writeInt<uint32_t>(cachedInfo.size);
+            peer->writeInt<uint16_t>(id);
+            peer->writeInt<uint8_t>(cachedInfo.type);
 
             for (int i = 0; i < 32; i++)
                 peer->writeByte(cachedInfo.hash[i]);
@@ -173,7 +196,7 @@ DECLARE_FOXNET_VAR_PACKET(PKTID_CONTENTSTREAM_CHUNK, FoxPeer) {
     uint8_t buff[sz];
 
     // read id
-    if (!peer->readUInt<uint16_t>(id))
+    if (!peer->readInt<uint16_t>(id))
         return;
 
     // check we actually have an open content stream matching this id
@@ -181,7 +204,7 @@ DECLARE_FOXNET_VAR_PACKET(PKTID_CONTENTSTREAM_CHUNK, FoxPeer) {
     if (contentIter == peer->ContentStreams.end() || !(*contentIter).second.incomming) { // if it doesn't exist, or it's not marked as an incomming stream, abort!
         // respond with an error
         peer->writeByte(PKTID_CONTENTSTREAM_STATUS);
-        peer->writeUInt<uint16_t>(id);
+        peer->writeInt<uint16_t>(id);
         peer->writeByte(CS_INVALID_ID);
         return;
     }
@@ -193,7 +216,7 @@ DECLARE_FOXNET_VAR_PACKET(PKTID_CONTENTSTREAM_CHUNK, FoxPeer) {
     if (fwrite((void*)buff, sizeof(uint8_t), sz, (*contentIter).second.file) != sz) {
         // error occured while writing, for now just close it
         peer->writeByte(PKTID_CONTENTSTREAM_STATUS);
-        peer->writeUInt<uint16_t>(id);
+        peer->writeInt<uint16_t>(id);
         peer->writeByte(CS_CLOSE);
         peer->ContentStreams.erase(contentIter);
         return;
@@ -213,7 +236,7 @@ DECLARE_FOXNET_VAR_PACKET(PKTID_CONTENTSTREAM_CHUNK, FoxPeer) {
             if (hash[i] != (*contentIter).second.hash[i]) {
                 // respond with an error
                 peer->writeByte(PKTID_CONTENTSTREAM_STATUS);
-                peer->writeUInt<uint16_t>(id);
+                peer->writeInt<uint16_t>(id);
                 peer->writeByte(CS_FAILED_HASH);
                 peer->ContentStreams.erase(contentIter);
                 return;
@@ -253,7 +276,7 @@ size_t FoxPeer::prepareVarPacket(PktID id) {
     size_t indx = sizeOut();
 
     // write our dummy size, this'll be overwritten by patchVarPacket
-    writeUInt<uint16_t>(dummySize);
+    writeInt<uint16_t>(dummySize);
 
     // then write our packet id
     writeByte(id);
@@ -266,7 +289,7 @@ void FoxPeer::patchVarPacket(size_t indx) {
     uint16_t pSize = sizeOut() - sizeof(uint16_t) - sizeof(uint8_t) - indx;
 
     // now patch the dummy size, (first 2 bytes)
-    patchUInt(pSize, indx);
+    patchInt(pSize, indx);
 }
 
 void FoxPeer::reqSendContent(std::FILE *file, uint8_t contentType) {
@@ -291,13 +314,13 @@ void FoxPeer::reqSendContent(std::FILE *file, uint8_t contentType) {
     writeByte(PKTID_CONTENTSTREAM_REQUEST);
 
     // write the buffer size
-    writeUInt<uint32_t>(sz);
+    writeInt<uint32_t>(sz);
 
     // write the id
-    writeUInt<uint16_t>(id);
+    writeInt<uint16_t>(id);
 
     // write the content type
-    writeUInt<uint8_t>(contentType);
+    writeInt<uint8_t>(contentType);
 
     // write hash to buffer
     for (int i = 0; i < 32; i++)
@@ -328,7 +351,7 @@ bool FoxPeer::sendContentChunk(uint16_t id) {
     uint8_t buf[sz];
 
     // write the content id
-    writeUInt<uint16_t>(id);
+    writeInt<uint16_t>(id);
 
     // read from the file into our temp buff
     if ((read = fread((void*)buf, sizeof(uint8_t), sz, (*contIter).second.file)) != sz) {
@@ -446,6 +469,14 @@ void FoxPeer::onStep() {
     // stubbed
 }
 
+void FoxPeer::onPing(int64_t peerTime, int64_t currTime) {
+    // stubbed
+}
+
+void FoxPeer::onPong(int64_t peerTime, int64_t currTime) {
+    // stubbed
+}
+
 bool FoxPeer::onContentRequest(uint8_t type, const ContentInfo content) {
     return false; // by default reject every request if the user doesn't implement this method
 }
@@ -533,7 +564,7 @@ bool FoxPeer::recvStep() {
                 if (sizeIn() != sizeof(PktSize)) // try again
                     return true;
 
-                readUInt<uint16_t>(pSize);
+                readInt<uint16_t>(pSize);
                 pktSize = pSize;
 
                 // if they try sending a packet larger than MAX_PACKET_SIZE kill em'

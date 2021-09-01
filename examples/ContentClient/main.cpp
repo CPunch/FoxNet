@@ -8,6 +8,10 @@ class ExampleClient : public FoxClient {
 public:
     ExampleClient(std::string ip, std::string p) : FoxClient(ip, p) {}
 
+    void onPing(int64_t peerTime, int64_t currTime) {
+        std::cout << "ping : " << currTime - peerTime << std::endl;
+    }
+
     bool onContentRequest(uint8_t type, const ContentInfo content) {
         return true; // accept all content requests
     }

@@ -18,15 +18,19 @@ public:
         std::cout << "handshake accepted!" << std::endl;
         // write our addition request
         writeByte(C2S_REQ_ADD);
-        writeUInt<uint32_t>(12);
-        writeUInt<uint32_t>(56);
+        writeInt<uint32_t>(12);
+        writeInt<uint32_t>(56);
+    }
+
+    void onPing(int64_t peerTime, int64_t currTime) {
+        std::cout << "ping : " << currTime - peerTime << std::endl;
     }
 };
 
 DECLARE_FOXNET_PACKET(S2C_NUM_RESPONSE, ExampleClient) {
     uint32_t resp;
 
-    peer->readUInt(resp);
+    peer->readInt(resp);
 
     std::cout << "got result of " << resp << std::endl;
 }

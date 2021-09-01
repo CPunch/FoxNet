@@ -16,8 +16,8 @@ public:
 DECLARE_FOXNET_PACKET(C2S_REQ_ADD, ExamplePeer) {
     uint32_t a, b, res;
 
-    peer->readUInt<uint32_t>(a);
-    peer->readUInt<uint32_t>(b);
+    peer->readInt<uint32_t>(a);
+    peer->readInt<uint32_t>(b);
 
     std::cout << "got (" << a << ", " << b << ")" << std::endl;
 
@@ -25,14 +25,15 @@ DECLARE_FOXNET_PACKET(C2S_REQ_ADD, ExamplePeer) {
     res = a + b;
 
     peer->writeByte(S2C_NUM_RESPONSE);
-    peer->writeUInt<uint32_t>(res);
+    peer->writeInt<uint32_t>(res);
 }
 
 int main() {
     FoxNet::FoxServer<ExamplePeer> server(1337);
 
     while(1) {
-        server.pollPeers(4000);
+        if (!server.pollPeers(3000)) // if out timeout was triggered, poll peers
+            server.pingPeers();
         std::cout << server.getPeerList().size() << " peers connected" << std::endl;
     }
 
