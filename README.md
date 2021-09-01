@@ -6,20 +6,22 @@
     <a href="https://github.com/CPunch/FoxNet/blob/master/LICENSE.md"><img src="https://img.shields.io/github/license/CPunch/FoxNet" alt="License"></a>
 </p>
 
-The Free Open Xross Networking library. Just another C++ networking library with an emphasis on being lightweight & portable. FoxNet is a blocking (or non-blocking with a settable timeout!) networking library with very little overhead, it's your generic client/server model made simple.
+Just another C++ networking library with an emphasis on being lightweight & portable. FoxNet is a blocking (or non-blocking with a settable timeout!) networking library with very little overhead, it's your generic client/server model made simple.
 
-# Compiling
+## Features
+
+- Sharing content (files) between peers
+- Support for both variable-length packets and static length packets.
+- Easy to use method-based event callbacks. Just define your own FoxPeer/FoxServerPeer class (see `examples/`)
+
+## Compiling
 
 ```
 mkdir build && cd build && cmake . ../ && make -j && cd ../
 ```
 
-After compiling, run the server and client examples!
+After compiling, the example binaries will be in the `bin/` directory. 
 
-```
-./bin/FoxServer & ./bin/FoxClient
-```
-
-# Documentation
+## Documentation
 
 Documentation is pending, stay tuned!
