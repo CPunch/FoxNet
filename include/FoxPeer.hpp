@@ -61,6 +61,7 @@
 
 namespace FoxNet {
     bool setSockNonblocking(SOCKET sock);
+    void killSocket(SOCKET sock);
 
     typedef enum {
         CS_READY, // peer is ready to receive the content

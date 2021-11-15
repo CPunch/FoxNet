@@ -25,6 +25,16 @@ bool FoxNet::setSockNonblocking(SOCKET sock) {
     return true;
 }
 
+void FoxNet::killSocket(SOCKET sock) {
+#ifdef _WIN32
+    shutdown(sock, SD_BOTH);
+    closesocket(sock);
+#else
+    shutdown(sock, SHUT_RDWR);
+    close(sock);
+#endif
+}
+
 using namespace FoxNet;
 
 void FoxPeer::_setupPackets() {
@@ -499,13 +509,7 @@ void FoxPeer::kill() {
         return;
 
     alive = false;
-#ifdef _WIN32
-    shutdown(sock, SD_BOTH);
-    closesocket(sock);
-#else
-    shutdown(sock, SHUT_RDWR);
-    close(sock);
-#endif
+    killSocket(sock);
 
     // fire our event
     onKilled();

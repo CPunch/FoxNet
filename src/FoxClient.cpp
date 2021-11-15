@@ -33,7 +33,7 @@ FoxClient::FoxClient(std::string ip, std::string port) {
         if (!SOCKETINVALID(connect(sock, curr->ai_addr, curr->ai_addrlen)))
             break;
 
-        close(sock);
+        killSocket(sock);
     }
     freeaddrinfo(result);
 
