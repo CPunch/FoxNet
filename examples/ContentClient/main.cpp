@@ -17,7 +17,7 @@ public:
     }
 
     void onContentReceived(const ContentInfo content) {
-        char buf[content.size];
+        char *buf = new char[content.size];
 
         std::cout << "received full content buffer! hash : { " << std::endl;
 
@@ -33,6 +33,8 @@ public:
             std::cout << buf[i];
         
         std::cout << std::endl;
+
+        delete[] buf;
     }
 };
 
