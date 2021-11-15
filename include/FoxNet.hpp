@@ -17,4 +17,4 @@
 #define FOXNET_MAJOR 0
 
 #define FOXMAGIC "FOX\71"
-#define FOXMAGICLEN strlen(FOXMAGIC)
+#define FOXMAGICLEN 5

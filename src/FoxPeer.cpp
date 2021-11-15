@@ -203,11 +203,13 @@ DECLARE_FOXNET_PACKET(PKTID_CONTENTSTREAM_STATUS, FoxPeer) {
 DECLARE_FOXNET_VAR_PACKET(PKTID_CONTENTSTREAM_CHUNK, FoxPeer) {
     uint16_t id;
     size_t sz = varSize - sizeof(uint16_t);
-    uint8_t buff[sz];
+    uint8_t *buff = new uint8_t[sz];
 
     // read id
-    if (!peer->readInt<uint16_t>(id))
+    if (!peer->readInt<uint16_t>(id)) {
+        delete[] buff;
         return;
+    }
 
     // check we actually have an open content stream matching this id
     auto contentIter = peer->ContentStreams.find(id);
@@ -216,6 +218,8 @@ DECLARE_FOXNET_VAR_PACKET(PKTID_CONTENTSTREAM_CHUNK, FoxPeer) {
         peer->writeByte(PKTID_CONTENTSTREAM_STATUS);
         peer->writeInt<uint16_t>(id);
         peer->writeByte(CS_INVALID_ID);
+
+        delete[] buff;
         return;
     }
 
@@ -229,6 +233,8 @@ DECLARE_FOXNET_VAR_PACKET(PKTID_CONTENTSTREAM_CHUNK, FoxPeer) {
         peer->writeInt<uint16_t>(id);
         peer->writeByte(CS_CLOSE);
         peer->ContentStreams.erase(contentIter);
+
+        delete[] buff;
         return;
     }
 
@@ -249,6 +255,8 @@ DECLARE_FOXNET_VAR_PACKET(PKTID_CONTENTSTREAM_CHUNK, FoxPeer) {
                 peer->writeInt<uint16_t>(id);
                 peer->writeByte(CS_FAILED_HASH);
                 peer->ContentStreams.erase(contentIter);
+
+                delete[] buff;
                 return;
             }
         }
@@ -260,6 +268,8 @@ DECLARE_FOXNET_VAR_PACKET(PKTID_CONTENTSTREAM_CHUNK, FoxPeer) {
         // erase content stream
         peer->ContentStreams.erase(contentIter);
     }
+
+    delete[] buff;
 }
 
 FoxPeer::FoxPeer() {
@@ -358,7 +368,7 @@ bool FoxPeer::sendContentChunk(uint16_t id) {
     if (sz > MAX_PACKET_SIZE - sizeof(uint16_t)) // uint16_t is to make sure we have room for our content id
         sz = MAX_PACKET_SIZE - sizeof(uint16_t);
 
-    uint8_t buf[sz];
+    uint8_t *buf = new uint8_t[sz];
 
     // write the content id
     writeInt<uint16_t>(id);
@@ -367,6 +377,8 @@ bool FoxPeer::sendContentChunk(uint16_t id) {
     if ((read = fread((void*)buf, sizeof(uint8_t), sz, (*contIter).second.file)) != sz) {
         // just fail silently, erase the content stream (but not from the queue since this can be called while iterating over it!)
         ContentStreams.erase(contIter);
+
+        delete[] buf;
         return true;
     }
 
@@ -382,6 +394,7 @@ bool FoxPeer::sendContentChunk(uint16_t id) {
         ContentStreams.erase(contIter);
     }
 
+    delete[] buf;
     return true;
 }
 
@@ -398,7 +411,7 @@ bool FoxPeer::flushSend() {
 
     // write bytes to the socket until an error occurs or we finish reading
     do {
-        sent = write(sock, (buffer_t*)(&buffer[sentBytes]), buffer.size() - sentBytes);
+        sent = send(sock, (buffer_t*)(&buffer[sentBytes]), buffer.size() - sentBytes, 0);
         /*std::cout << " . ";
         for (size_t i = 0; i < sent; i++) {
             std::cout << "0x" << std::hex << std::setw(2) << std::setfill('0') << (int)buffer[i+sentBytes] << std::dec << " ";
@@ -421,8 +434,8 @@ int FoxPeer::rawRecv(size_t sz) {
     if (sz == 0) // sanity check
         return 0;
 
-    Byte buf[sz];
-    int rcvd = read(sock, (buffer_t*)(buf), sz);
+    Byte *buf = new Byte[sz];
+    int rcvd = recv(sock, (buffer_t*)(buf), sz, 0);
 
     /*std::cout << "recieved " << rcvd << " bytes" << std::endl;
 
@@ -439,15 +452,20 @@ int FoxPeer::rawRecv(size_t sz) {
         // if it's a posix system, also make sure its not a EAGAIN result (which is a recoverable error, there's just nothing to read lol)
         && FN_ERRNO != EAGAIN
 #endif
-        ))
-    // if the socket closed or an error occured, return the error result
+        )) {
+        // if the socket closed or an error occured, return the error result
+        delete[] buf;
         return -1;
+        }
 
     if (rcvd > 0)
         rawWriteIn(buf, rcvd);
-    else
+    else {
+        delete[] buf;
         return 0;
+    }
 
+    delete[] buf;
     return rcvd;
 }
 
