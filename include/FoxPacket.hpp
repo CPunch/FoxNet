@@ -14,6 +14,9 @@ namespace FoxNet {
     typedef Byte PktID;
     typedef uint16_t PktSize;
 
+    void Init();
+    void Cleanup();
+
     /*
     * reserved packet ids for internal packets
     * we have room for up to 256 different packet types (including user-defined packets)

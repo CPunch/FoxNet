@@ -35,6 +35,21 @@ void FoxNet::killSocket(SOCKET sock) {
 #endif
 }
 
+void FoxNet::Init() {
+#ifdef _WIN32
+    WSADATA wsaData;
+    if (WSAStartup(MAKEWORD(1, 1), &wsaData) != 0) {
+        FOXFATAL("WSAStartup failed!")
+    }
+#endif
+}
+
+void FoxNet::Cleanup() {
+#ifdef _WIN32
+    WSACleanup();
+#endif
+}
+
 using namespace FoxNet;
 
 void FoxPeer::_setupPackets() {

@@ -2,7 +2,6 @@
 
 using namespace FoxNet;
 
-
 class ExamplePeer : public FoxServerPeer {
 private:
     std::FILE *content;
@@ -26,6 +25,7 @@ public:
 };
 
 int main() {
+    FoxNet::Init();
     FoxNet::FoxServer<ExamplePeer> server(23337);
 
     while(1) {
@@ -33,5 +33,6 @@ int main() {
         server.pingPeers();
     }
 
+    FoxNet::Cleanup();
     return 0;
 }

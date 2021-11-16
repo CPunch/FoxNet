@@ -39,11 +39,13 @@ public:
 };
 
 int main() {
+    FoxNet::Init();
     ExampleClient client("127.0.0.1", "23337");
 
     while (client.isAlive()) {
         client.pollPeer(1000);
     }
 
+    FoxNet::Cleanup();
     return 0;
 }

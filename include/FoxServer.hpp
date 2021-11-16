@@ -45,7 +45,7 @@ namespace FoxNet {
 
         FoxServer(uint16_t p): port(p) {
             // open our socket
-            sock =  socket(AF_INET, SOCK_STREAM, 0);
+            sock = socket(AF_INET, SOCK_STREAM, 0);
             if (SOCKETINVALID(sock)) {
                 FOXFATAL("socket() failed!");
             }
