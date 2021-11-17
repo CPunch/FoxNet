@@ -41,11 +41,15 @@ void FoxNet::killSocket(SOCKET sock) {
 }
 
 // this *SHOULD* be called before any socket API. On POSIX platforms this is stubbed, however on Windows this is required to start WSA
-void _FoxNet_Init() {
+void FoxNet::_FoxNet_Init() {
     std::lock_guard<std::mutex> FNLock(_FNSetupLock);
+
+    std::cout << "_FNSetup: " << _FNSetup << std::endl;
 
     if (_FNSetup++ > 0)
         return; // WSA is already setup!
+
+    std::cout << "WSAStartup!" << std::endl;
 
 #ifdef _WIN32
     WSADATA wsaData;
@@ -56,11 +60,13 @@ void _FoxNet_Init() {
 }
 
 // this *SHOULD* only be called when there is no more socket API to be called. On POSIX platforms this is stubbed, however on Windows this is required to cleanup WSA
-void _FoxNet_Cleanup() {
+void FoxNet::_FoxNet_Cleanup() {
     std::lock_guard<std::mutex> FNLock(_FNSetupLock);
 
     if (--_FNSetup > 0)
         return; // WSA still needs to be up, a FoxNet peer is still using it
+
+    std::cout << "WSACleanup!" << std::endl;
 
 #ifdef _WIN32
     WSACleanup();
@@ -69,7 +75,8 @@ void _FoxNet_Cleanup() {
 
 using namespace FoxNet;
 
-// this function is called first before any derived class is constructed, so it's the perfect place to initialize our default packet map & initialize WSA (if we're on windows)
+// this function is called first before any derived class is constructed, so it's the perfect place to initialize 
+// our default packet map & initialize WSA (if we're on windows)
 void FoxPeer::_setupPackets() {
     INIT_FOXNET_PACKET(PKTID_PING, sizeof(int64_t))
     INIT_FOXNET_PACKET(PKTID_PONG, sizeof(int64_t))

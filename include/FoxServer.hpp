@@ -44,6 +44,8 @@ namespace FoxNet {
 // ============================================= [[ Base FoxServer implementation ]] =============================================
 
         FoxServer(uint16_t p): port(p) {
+            _FoxNet_Init();
+
             // open our socket
             sock = socket(AF_INET, SOCK_STREAM, 0);
             if (SOCKETINVALID(sock)) {
@@ -89,6 +91,8 @@ namespace FoxNet {
                 peer->kill();
                 delete peer;
             }
+
+            _FoxNet_Cleanup();
         }
 
         // used for connection keep-alive, actual packet will be sent on the next call to pollPeers()
