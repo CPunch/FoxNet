@@ -1,7 +1,8 @@
 cmake_minimum_required(VERSION 3.10)
 project(FoxNet VERSION 0.0)
 
-set(CXX_STANDARD_REQUIRED 17)
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Output binaries to the bin folder in the source directory
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin)
