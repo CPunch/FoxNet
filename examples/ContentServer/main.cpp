@@ -26,14 +26,10 @@ public:
 
 int main() {
     FoxNet::FoxServer<ExamplePeer> server(23337);
-    int64_t pingTimer = getTimestamp() + 2;
 
     while(1) {
-        server.pollPeers(1000);
-
-        if (pingTimer < getTimestamp()) {
+        if (!server.pollPeers(1000)) { // if poll() didn't have any events to run, ping the peers
             server.pingPeers();
-            pingTimer = getTimestamp() + 2;
             std::cout << server.getPeerList().size() << " peers connected!" << std::endl;
         }
     }

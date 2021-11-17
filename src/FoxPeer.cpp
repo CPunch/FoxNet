@@ -44,12 +44,8 @@ void FoxNet::killSocket(SOCKET sock) {
 void FoxNet::_FoxNet_Init() {
     std::lock_guard<std::mutex> FNLock(_FNSetupLock);
 
-    std::cout << "_FNSetup: " << _FNSetup << std::endl;
-
     if (_FNSetup++ > 0)
         return; // WSA is already setup!
-
-    std::cout << "WSAStartup!" << std::endl;
 
 #ifdef _WIN32
     WSADATA wsaData;
@@ -65,8 +61,6 @@ void FoxNet::_FoxNet_Cleanup() {
 
     if (--_FNSetup > 0)
         return; // WSA still needs to be up, a FoxNet peer is still using it
-
-    std::cout << "WSACleanup!" << std::endl;
 
 #ifdef _WIN32
     WSACleanup();
