@@ -37,10 +37,14 @@ public:
 };
 
 int main() {
-    ExampleClient client("127.0.0.1", "23337");
+    try {
+        ExampleClient client("127.0.0.1", "23337");
 
-    while (client.isAlive()) {
-        client.pollPeer(1000);
+        while (client.isAlive()) {
+            client.pollPeer(1000);
+        }
+    } catch(FoxNet::FoxException &e) {
+        std::cerr << "Fatal Error! : " << e.what() << std::endl;
     }
 
     return 0;

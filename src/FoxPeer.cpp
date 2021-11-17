@@ -643,17 +643,22 @@ bool FoxPeer::recvStep() {
                 return false;
 
             if (sizeIn() == pktSize) {
-                if (isPacketVar(currentPkt)) {
-                    PktVarHandler hndlr = getVarPacketHandler(currentPkt);
-                    if (hndlr != nullptr) {
-                        hndlr(this, pktSize);
+                try {
+                    if (isPacketVar(currentPkt)) {
+                        PktVarHandler hndlr = getVarPacketHandler(currentPkt);
+                        if (hndlr != nullptr) {
+                            hndlr(this, pktSize);
+                        }
+                    } else {
+                        // dispatch Packet Handler
+                        PktHandler hndlr = getPacketHandler(currentPkt);
+                        if (hndlr != nullptr) {
+                            hndlr(this);
+                        }
                     }
-                } else {
-                    // dispatch Packet Handler
-                    PktHandler hndlr = getPacketHandler(currentPkt);
-                    if (hndlr != nullptr) {
-                        hndlr(this);
-                    }
+                } catch(FoxException &x) {
+                    cachedException = x;
+                    return false;
                 }
 
                 // reset

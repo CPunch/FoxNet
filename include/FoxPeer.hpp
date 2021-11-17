@@ -45,6 +45,7 @@
 
 #include "ByteStream.hpp"
 #include "FoxPacket.hpp"
+#include "FoxException.hpp"
 #include "SHA2.hpp"
 
 // 1gb
@@ -94,6 +95,7 @@ namespace FoxNet {
         PktSize pktSize;
         bool alive = true;
         uint16_t contentID = 0;
+        FoxException cachedException;
 
         DEF_FOXNET_PACKET(PKTID_PING)
         DEF_FOXNET_PACKET(PKTID_PONG)

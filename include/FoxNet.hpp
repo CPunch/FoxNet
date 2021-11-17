@@ -3,9 +3,10 @@
 #include <iostream>
 #include <cstring>
 
+#include "FoxException.hpp"
+
 #define FOXFATAL(x) \
-    std::cerr << "[FATAL] FoxNet: " << x << std::endl; \
-    exit(EXIT_FAILURE);
+    throw FoxNet::FoxException(x);
 
 #define FOXWARN(x) \
     std::cerr << "[WARN] FoxNet: " << x << std::endl; \

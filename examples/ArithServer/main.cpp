@@ -29,12 +29,16 @@ DECLARE_FOXNET_PACKET(C2S_REQ_ADD, ExamplePeer) {
 }
 
 int main() {
-    FoxNet::FoxServer<ExamplePeer> server(1337);
+    try {
+        FoxNet::FoxServer<ExamplePeer> server(1337);
 
-    while(1) {
-        if (!server.pollPeers(3000)) // if out timeout was triggered, poll peers
-            server.pingPeers();
-        std::cout << server.getPeerList().size() << " peers connected" << std::endl;
+        while(1) {
+            if (!server.pollPeers(3000)) // if out timeout was triggered, poll peers
+                server.pingPeers();
+            std::cout << server.getPeerList().size() << " peers connected" << std::endl;
+        }
+    } catch(FoxNet::FoxException &e) {
+        std::cerr << "Fatal Error! : " << e.what() << std::endl;
     }
 
     return 0;
