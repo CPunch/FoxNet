@@ -120,6 +120,7 @@ namespace FoxNet {
     public:
         FoxPeer();
         FoxPeer(SOCKET);
+        ~FoxPeer();
 
         /*
          * This should be called prior to writing packet data to the stream.

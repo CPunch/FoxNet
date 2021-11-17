@@ -29,7 +29,6 @@ DECLARE_FOXNET_PACKET(C2S_REQ_ADD, ExamplePeer) {
 }
 
 int main() {
-    FoxNet::Init();
     FoxNet::FoxServer<ExamplePeer> server(1337);
 
     while(1) {
@@ -38,6 +37,5 @@ int main() {
         std::cout << server.getPeerList().size() << " peers connected" << std::endl;
     }
 
-    FoxNet::Cleanup();
     return 0;
 }

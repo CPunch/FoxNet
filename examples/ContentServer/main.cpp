@@ -25,14 +25,18 @@ public:
 };
 
 int main() {
-    FoxNet::Init();
     FoxNet::FoxServer<ExamplePeer> server(23337);
+    int64_t pingTimer = getTimestamp() + 2;
 
     while(1) {
         server.pollPeers(1000);
-        server.pingPeers();
+
+        if (pingTimer < getTimestamp()) {
+            server.pingPeers();
+            pingTimer = getTimestamp() + 2;
+            std::cout << server.getPeerList().size() << " peers connected!" << std::endl;
+        }
     }
 
-    FoxNet::Cleanup();
     return 0;
 }

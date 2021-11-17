@@ -3,6 +3,11 @@
 
 #include <iostream>
 #include <iomanip>
+#include <mutex>
+
+// if _FNSetup > 0, WSA has already been started. if _FNSetup == 0, WSA needs to be cleaned up
+static int _FNSetup = 0;
+static std::mutex _FNSetupLock;
 
 bool FoxNet::setSockNonblocking(SOCKET sock) {
 #ifdef _WIN32
@@ -35,7 +40,13 @@ void FoxNet::killSocket(SOCKET sock) {
 #endif
 }
 
-void FoxNet::Init() {
+// this *SHOULD* be called before any socket API. On POSIX platforms this is stubbed, however on Windows this is required to start WSA
+void _FoxNet_Init() {
+    std::lock_guard<std::mutex> FNLock(_FNSetupLock);
+
+    if (_FNSetup++ > 0)
+        return; // WSA is already setup!
+
 #ifdef _WIN32
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(1, 1), &wsaData) != 0) {
@@ -44,7 +55,13 @@ void FoxNet::Init() {
 #endif
 }
 
-void FoxNet::Cleanup() {
+// this *SHOULD* only be called when there is no more socket API to be called. On POSIX platforms this is stubbed, however on Windows this is required to cleanup WSA
+void _FoxNet_Cleanup() {
+    std::lock_guard<std::mutex> FNLock(_FNSetupLock);
+
+    if (--_FNSetup > 0)
+        return; // WSA still needs to be up, a FoxNet peer is still using it
+
 #ifdef _WIN32
     WSACleanup();
 #endif
@@ -52,12 +69,15 @@ void FoxNet::Cleanup() {
 
 using namespace FoxNet;
 
+// this function is called first before any derived class is constructed, so it's the perfect place to initialize our default packet map & initialize WSA (if we're on windows)
 void FoxPeer::_setupPackets() {
     INIT_FOXNET_PACKET(PKTID_PING, sizeof(int64_t))
     INIT_FOXNET_PACKET(PKTID_PONG, sizeof(int64_t))
     INIT_FOXNET_PACKET(PKTID_CONTENTSTREAM_REQUEST, sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint8_t) + 32)
     INIT_FOXNET_PACKET(PKTID_CONTENTSTREAM_STATUS, sizeof(uint16_t) + sizeof(uint8_t))
     INIT_FOXNET_VAR_PACKET(PKTID_CONTENTSTREAM_CHUNK)
+
+    _FoxNet_Init();
 }
 
 uint16_t FoxPeer::findNextContentID() {
@@ -218,11 +238,10 @@ DECLARE_FOXNET_PACKET(PKTID_CONTENTSTREAM_STATUS, FoxPeer) {
 DECLARE_FOXNET_VAR_PACKET(PKTID_CONTENTSTREAM_CHUNK, FoxPeer) {
     uint16_t id;
     size_t sz = varSize - sizeof(uint16_t);
-    uint8_t *buff = new uint8_t[sz];
+    VLA<uint8_t> buff(sz);
 
     // read id
     if (!peer->readInt<uint16_t>(id)) {
-        delete[] buff;
         return;
     }
 
@@ -234,22 +253,20 @@ DECLARE_FOXNET_VAR_PACKET(PKTID_CONTENTSTREAM_CHUNK, FoxPeer) {
         peer->writeInt<uint16_t>(id);
         peer->writeByte(CS_INVALID_ID);
 
-        delete[] buff;
         return;
     }
 
     // read the rest of the stream
-    peer->readBytes(buff, sz);
+    peer->readBytes(buff.buf, sz);
 
     // write buffer to file
-    if (fwrite((void*)buff, sizeof(uint8_t), sz, (*contentIter).second.file) != sz) {
-        // error occured while writing, for now just close it
+    if (fwrite((void*)buff.buf, sizeof(uint8_t), sz, (*contentIter).second.file) != sz) {
+        // error occurred while writing, for now just close it
         peer->writeByte(PKTID_CONTENTSTREAM_STATUS);
         peer->writeInt<uint16_t>(id);
         peer->writeByte(CS_CLOSE);
         peer->ContentStreams.erase(contentIter);
 
-        delete[] buff;
         return;
     }
 
@@ -271,7 +288,6 @@ DECLARE_FOXNET_VAR_PACKET(PKTID_CONTENTSTREAM_CHUNK, FoxPeer) {
                 peer->writeByte(CS_FAILED_HASH);
                 peer->ContentStreams.erase(contentIter);
 
-                delete[] buff;
                 return;
             }
         }
@@ -283,8 +299,6 @@ DECLARE_FOXNET_VAR_PACKET(PKTID_CONTENTSTREAM_CHUNK, FoxPeer) {
         // erase content stream
         peer->ContentStreams.erase(contentIter);
     }
-
-    delete[] buff;
 }
 
 FoxPeer::FoxPeer() {
@@ -301,6 +315,11 @@ FoxPeer::FoxPeer(SOCKET _sock) {
         PKTMAP[i] = PacketInfo();
 
     _setupPackets();
+}
+
+// the base class is deconstructed last, so it's the perfect place to cleanup WSA (if we're on windows)
+FoxPeer::~FoxPeer() {
+    _FoxNet_Cleanup();
 }
 
 size_t FoxPeer::prepareVarPacket(PktID id) {
@@ -383,22 +402,21 @@ bool FoxPeer::sendContentChunk(uint16_t id) {
     if (sz > MAX_PACKET_SIZE - sizeof(uint16_t)) // uint16_t is to make sure we have room for our content id
         sz = MAX_PACKET_SIZE - sizeof(uint16_t);
 
-    uint8_t *buf = new uint8_t[sz];
+    VLA<uint8_t> buf(sz);
 
     // write the content id
     writeInt<uint16_t>(id);
 
     // read from the file into our temp buff
-    if ((read = fread((void*)buf, sizeof(uint8_t), sz, (*contIter).second.file)) != sz) {
+    if ((read = fread((void*)buf.buf, sizeof(uint8_t), sz, (*contIter).second.file)) != sz) {
         // just fail silently, erase the content stream (but not from the queue since this can be called while iterating over it!)
         ContentStreams.erase(contIter);
 
-        delete[] buf;
         return true;
     }
 
     // write buffer to out stream
-    writeBytes(buf, sz);
+    writeBytes(buf.buf, sz);
 
     // complete var packet
     patchVarPacket(indx);
@@ -409,7 +427,6 @@ bool FoxPeer::sendContentChunk(uint16_t id) {
         ContentStreams.erase(contIter);
     }
 
-    delete[] buf;
     return true;
 }
 
@@ -434,7 +451,7 @@ bool FoxPeer::flushSend() {
                 std::cout << std::endl;
         }*/
 
-        // if the socket closed or an error occured, return the error result
+        // if the socket closed or an error occurred, return the error result
         if (sent == 0 || (SOCKETERROR(sent) && FN_ERRNO != FN_EWOULD))
             return false;
     } while((sentBytes += sent) != buffer.size());
@@ -449,8 +466,8 @@ int FoxPeer::rawRecv(size_t sz) {
     if (sz == 0) // sanity check
         return 0;
 
-    Byte *buf = new Byte[sz];
-    int rcvd = recv(sock, (buffer_t*)(buf), sz, 0);
+    VLA<Byte> buf(sz);
+    int rcvd = recv(sock, (buffer_t*)(buf.buf), sz, 0);
 
     /*std::cout << "recieved " << rcvd << " bytes" << std::endl;
 
@@ -468,19 +485,16 @@ int FoxPeer::rawRecv(size_t sz) {
         && FN_ERRNO != EAGAIN
 #endif
         )) {
-        // if the socket closed or an error occured, return the error result
-        delete[] buf;
+        // if the socket closed or an error occurred, return the error result
         return -1;
         }
 
     if (rcvd > 0)
-        rawWriteIn(buf, rcvd);
+        rawWriteIn(buf.buf, rcvd);
     else {
-        delete[] buf;
         return 0;
     }
 
-    delete[] buf;
     return rcvd;
 }
 

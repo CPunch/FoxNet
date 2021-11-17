@@ -36,13 +36,11 @@ DECLARE_FOXNET_PACKET(S2C_NUM_RESPONSE, ExampleClient) {
 }
 
 int main() {
-    FoxNet::Init();
     ExampleClient client("127.0.0.1", "1337");
 
     while (client.isAlive()) {
         client.pollPeer(-1);
     }
 
-    FoxNet::Cleanup();
     return 0;
 }

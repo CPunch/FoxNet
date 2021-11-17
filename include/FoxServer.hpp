@@ -200,11 +200,11 @@ namespace FoxNet {
                 peerType *peer = (*pIter).second;
 
                 if (fd.revents & POLLIN) { // is there data waiting to be read?
-                    if (!peer->recvStep()) { // error occured on socket
+                    if (!peer->recvStep()) { // error occurred on socket
                         peer->kill();
                         goto _rmvPeer;
                     }
-                } else { // peer disconnected or error occured, just remove the peer
+                } else { // peer disconnected or error occurred, just remove the peer
                 _rmvPeer:
                     onPeerDisconnect(peer);
                     // remove peer from the map & the fds vector

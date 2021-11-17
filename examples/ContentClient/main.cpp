@@ -17,7 +17,7 @@ public:
     }
 
     void onContentReceived(const ContentInfo content) {
-        char *buf = new char[content.size];
+        VLA<char> buf(content.size);
 
         std::cout << "received full content buffer! hash : { " << std::endl;
 
@@ -27,25 +27,21 @@ public:
         std::cout << "} buff : ";
 
         // read content
-        fread(buf, 1, content.size, content.file);
+        fread(buf.buf, 1, content.size, content.file);
 
         for (int i = 0; i < content.size; i++)
             std::cout << buf[i];
         
         std::cout << std::endl;
-
-        delete[] buf;
     }
 };
 
 int main() {
-    FoxNet::Init();
     ExampleClient client("127.0.0.1", "23337");
 
     while (client.isAlive()) {
         client.pollPeer(1000);
     }
 
-    FoxNet::Cleanup();
     return 0;
 }

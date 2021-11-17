@@ -11,6 +11,35 @@ namespace FoxNet {
     typedef unsigned char Byte;
 
     /*
+     * Variable-Length Array
+     *
+     *  This is to combat some MSVC ugly-ness and allow us to cleanly define short-lived arrays with variable length
+     * without having to remember to clean it up :D
+     */
+    template<typename T>
+    class VLA {
+    public:
+        T *buf;
+        size_t sz;
+
+        VLA(size_t s) {
+            buf = new T[s];
+        }
+
+        ~VLA() {
+            delete[] buf;
+        }
+
+        T& operator[](std::size_t i) {
+            return buf[i];
+        }
+
+        const T& operator[](std::size_t i) const {
+            return buf[i];
+        } 
+    };
+
+    /*
      * ByteStream
      */
     class ByteStream {
