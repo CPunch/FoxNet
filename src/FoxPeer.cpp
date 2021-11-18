@@ -431,38 +431,6 @@ bool FoxPeer::sendContentChunk(uint16_t id) {
     return true;
 }
 
-bool FoxPeer::flushSend() {
-    std::vector<Byte> buffer = getOutBuffer();
-    size_t sentBytes = 0;
-    int sent;
-
-    // sanity check, don't send nothing
-    if (buffer.size() == 0)
-        return true;
-
-    //std::cout << "sending " << buffer.size() << " bytes..." << std::endl;
-
-    // write bytes to the socket until an error occurs or we finish reading
-    do {
-        sent = send(sock, (buffer_t*)(&buffer[sentBytes]), buffer.size() - sentBytes, 0);
-        /*std::cout << " . ";
-        for (size_t i = 0; i < sent; i++) {
-            std::cout << "0x" << std::hex << std::setw(2) << std::setfill('0') << (int)buffer[i+sentBytes] << std::dec << " ";
-            if ((i+1) % 8 == 0)
-                std::cout << std::endl;
-        }*/
-
-        // if the socket closed or an error occurred, return the error result
-        if (sent == 0 || (SOCKETERROR(sent) && FN_ERRNO != FN_EWOULD))
-            return false;
-    } while((sentBytes += sent) != buffer.size());
-
-    //std::cout << std::endl;
-
-    flushOut();
-    return true;
-}
-
 int FoxPeer::rawRecv(size_t sz) {
     if (sz == 0) // sanity check
         return 0;
@@ -657,7 +625,9 @@ bool FoxPeer::recvStep() {
                         }
                     }
                 } catch(FoxException &x) {
+                    // report the exception, the caller will decide to ignore it or not
                     cachedException = x;
+                    exceptionThrown = true;
                     return false;
                 }
 
@@ -671,5 +641,41 @@ bool FoxPeer::recvStep() {
         }
     }
 
+    return isAlive();
+}
+
+bool FoxPeer::flushSend() {
+    std::vector<Byte> buffer = getOutBuffer();
+    size_t sentBytes = 0;
+    int sent;
+
+    // sanity check, don't send nothing
+    if (buffer.size() == 0)
+        return true;
+
+    //std::cout << "sending " << buffer.size() << " bytes..." << std::endl;
+
+    // write bytes to the socket until an error occurs or we finish reading
+    do {
+        sent = send(sock, (buffer_t*)(&buffer[sentBytes]), buffer.size() - sentBytes, 0);
+        /*std::cout << " . ";
+        for (size_t i = 0; i < sent; i++) {
+            std::cout << "0x" << std::hex << std::setw(2) << std::setfill('0') << (int)buffer[i+sentBytes] << std::dec << " ";
+            if ((i+1) % 8 == 0)
+                std::cout << std::endl;
+        }*/
+
+        // if the socket closed or an error occurred, return the error result
+        if (sent == 0 || (SOCKETERROR(sent) && FN_ERRNO != FN_EWOULD))
+            return false;
+    } while((sentBytes += sent) != buffer.size());
+
+    //std::cout << std::endl;
+
+    flushOut();
     return true;
+}
+
+SOCKET FoxPeer::getRawSock() {
+    return sock;
 }

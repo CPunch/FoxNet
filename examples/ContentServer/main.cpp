@@ -16,11 +16,17 @@ public:
     }
 
     void onReady() {
-        reqSendContent(content, 0);
+        if (content)
+            reqSendContent(content, 0);
+        else { // file stream failed to open, kill the peer connection
+            std::cout << "failed to open file stream! killing connection!" << std::endl;
+            kill();
+        }
     }
 
     void onContentSent(const ContentInfo info) {
         std::cout << "finished sending content! client should have it now." << std::endl;
+        std::fclose(content);
     }
 };
 

@@ -97,8 +97,12 @@ void FoxClient::pollPeer(int timeout) {
     }
 
     // try steping, if there was an error handling a packet, kill the connection!
-    if (fd.revents & POLLIN && !recvStep())
+    if (fd.revents & POLLIN && !recvStep()) {
         kill();
+
+        if (exceptionThrown)
+            throw cachedException;
+    }
 
     fd.revents = 0;
 }

@@ -27,6 +27,11 @@
     #include <netinet/in.h>
     #include <arpa/inet.h>
     #include <poll.h>
+#ifdef __linux__
+    #include <sys/epoll.h>
+    // max events for epoll()
+    #define MAX_EPOLL_EVENTS 128
+#endif
     #include <unistd.h>
     #include <errno.h>
 
@@ -95,7 +100,6 @@ namespace FoxNet {
         PktSize pktSize;
         bool alive = true;
         uint16_t contentID = 0;
-        FoxException cachedException;
 
         DEF_FOXNET_PACKET(PKTID_PING)
         DEF_FOXNET_PACKET(PKTID_PONG)
@@ -111,6 +115,8 @@ namespace FoxNet {
 
     protected:
         PacketInfo PKTMAP[UINT8_MAX+1];
+        FoxException cachedException;
+        bool exceptionThrown = false;
         SOCKET sock;
 
         int rawRecv(size_t sz);
@@ -158,5 +164,7 @@ namespace FoxNet {
         bool recvStep(); // only call this when poll() returns an event on this socket
         bool sendStep(); // call this before calling poll()
         bool flushSend();
+
+        SOCKET getRawSock();
     };
 }
