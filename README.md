@@ -17,7 +17,7 @@ Just another C++ networking library with an emphasis on being lightweight & port
 ## Compiling
 
 ```
-mkdir build && cd build && cmake . ../ && make -j && cd ../
+cmake -B build && cmake --build build
 ```
 
 After compiling, the example binaries will be in the `bin/` directory. 

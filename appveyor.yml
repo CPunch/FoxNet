@@ -30,7 +30,7 @@ for:
   install:
     - sudo apt install clang cmake -y
   build_script:
-    - sh: cmake -B build && cd build && make -j
+    - sh: cmake -B build && cmake --build build
   artifacts:
     - path: bin
       name: ubuntu20_04-bin-x64
