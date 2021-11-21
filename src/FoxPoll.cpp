@@ -77,7 +77,7 @@ std::vector<FoxPollEvent> FoxPollList::pollList(int timeout) {
     }
 
     for (int i = 0; i < nEvents; i++) {
-        events.push_back(FoxPollEvent(ep_events[i].data.fd, ep_events[i].events == EPOLLIN));
+        events.push_back(FoxPollEvent(ep_events[i].data.fd, ep_events[i].events & EPOLLIN));
     }
 #else
     nEvents = poll(fds.data(), fds.size(), timeout); // poll returns -1 for error, or the number of events
@@ -90,7 +90,7 @@ std::vector<FoxPollEvent> FoxPollList::pollList(int timeout) {
     for (auto iter = fds.begin(); iter != fds.end() && nEvents > 0; iter++) {
         PollFD pfd = (*iter);
         if (pfd.revents != 0) {
-            events.push_back(FoxPollEvent(pfd.fd, pfd.revents == POLLIN));
+            events.push_back(FoxPollEvent(pfd.fd, pfd.revents & POLLIN));
             --nEvents; // decrement the remaining events
         }
     }
