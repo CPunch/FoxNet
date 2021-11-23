@@ -10,7 +10,7 @@ Just another C++ networking library with an emphasis on being lightweight & port
 
 ## Features
 
-- Sharing content (files) between peers
+- Cross-platform polling interface (epoll on Linux, poll on the other platforms)
 - Support for both variable-length packets and static length packets.
 - Easy to use method-based event callbacks. Just define your own FoxPeer/FoxServerPeer class (see `examples/`)
 
