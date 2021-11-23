@@ -175,26 +175,28 @@ namespace FoxNet {
                 if (pIter == peers.end()) {
                     FOXWARN("event on unknown socket! closing and removing from queue...");
 
-                    // closes the socket & remove it from the poll list
-                    killSocket(evnt.sock);
+                    // remove it from the poll list & closes the socket
                     pollList.deleteSock(evnt.sock);
+                    killSocket(evnt.sock);
                     continue;
                 }
 
                 peer = (*pIter).second;
                 if (evnt.pollIn) { // is there data waiting to be read?
                     if (!peer->recvStep()) { // error occurred on socket
-                        peer->kill();
                         goto _rmvPeer;
                     }
                 } else { // peer disconnected or error occurred, just remove the peer
                 _rmvPeer:
-                    onPeerDisconnect(peer);
                     // remove peer
                     peers.erase(pIter);
 
-                    // removes sock from poll list
+                    // removes sock from poll list & kills the peer
                     pollList.deleteSock(evnt.sock);
+                    peer->kill();
+
+                    // calls event
+                    onPeerDisconnect(peer);
 
                     // frees peer
                     delete peer;

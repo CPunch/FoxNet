@@ -74,15 +74,8 @@ using namespace FoxNet;
 void FoxPeer::_setupPackets() {
     INIT_FOXNET_PACKET(PKTID_PING, sizeof(int64_t))
     INIT_FOXNET_PACKET(PKTID_PONG, sizeof(int64_t))
-    INIT_FOXNET_PACKET(PKTID_CONTENTSTREAM_REQUEST, sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint8_t) + 32)
-    INIT_FOXNET_PACKET(PKTID_CONTENTSTREAM_STATUS, sizeof(uint16_t) + sizeof(uint8_t))
-    INIT_FOXNET_VAR_PACKET(PKTID_CONTENTSTREAM_CHUNK)
 
     _FoxNet_Init();
-}
-
-uint16_t FoxPeer::findNextContentID() {
-    return contentID++;
 }
 
 DECLARE_FOXNET_PACKET(PKTID_PING, FoxPeer) {
@@ -104,202 +97,6 @@ DECLARE_FOXNET_PACKET(PKTID_PONG, FoxPeer) {
     peer->readInt<int64_t>(peerTime);
 
     peer->onPong(peerTime, currTime);
-}
-
-// ============== CONTENTSTREAM PACKET DECLARATIONS ==============
-
-DECLARE_FOXNET_PACKET(PKTID_CONTENTSTREAM_REQUEST, FoxPeer) {
-    sha2::sha256_hash hash;
-    ContentInfo cIn;
-    uint32_t sz;
-    uint16_t id;
-    uint8_t type;
-    uint8_t resp = CS_READY;
-
-    // grab the size
-    peer->readInt<uint32_t>(sz);
-
-    if (sz > CONTENTSTREAM_MAX_SIZE) {
-        resp = CS_TOOBIG;
-        goto _csReqResponse;
-    }
-
-    // grab the id
-    peer->readInt<uint16_t>(id);
-
-    // grab the type
-    peer->readByte(type);
-
-    if (peer->ContentStreams.find(id) != peer->ContentStreams.end()) {
-        resp = CS_EXHAUSED_ID;
-        goto _csReqResponse;
-    }
-
-    // grab the hash
-    for (int i = 0; i < 32; i++)
-        peer->readByte(hash[i]);
-
-    // setup the content stream
-    cIn.hash = hash;
-    cIn.file = std::tmpfile();
-    cIn.size = sz;
-    cIn.processed = 0;
-    cIn.type = type;
-    cIn.incomming = true;
-    peer->ContentStreams[id] = cIn;
-
-_csReqResponse:
-    // respond
-    peer->writeByte(PKTID_CONTENTSTREAM_STATUS);
-    peer->writeInt<uint16_t>(id);
-    peer->writeByte(resp);
-}
-
-DECLARE_FOXNET_PACKET(PKTID_CONTENTSTREAM_STATUS, FoxPeer) {
-    uint16_t id;
-    uint8_t status;
-
-    // grab the id
-    peer->readInt<uint16_t>(id);
-
-    // grab the status
-    peer->readByte(status);
-
-    // first, check we have a content stream matching the id
-    auto contentIter = peer->ContentStreams.find(id);
-    if (contentIter == peer->ContentStreams.end())
-        return; // we don't have a matching content id, ignore the message
-
-    switch(status) {
-        case CS_READY: { // they accepted the request to send content, queue the content stream
-            if (!(*contentIter).second.incomming) // minor sanity check
-                peer->sendContentQueue.insert(id);
-            fseek((*contentIter).second.file, 0, SEEK_SET);
-            return;
-        }
-        case CS_CLOSE: { // they requested to close the content stream
-            peer->ContentStreams.erase(contentIter);
-            peer->sendContentQueue.erase(id);
-            return;
-        }
-        case CS_EXHAUSED_ID: { // they for some reason already have a content stream with that id?
-            // try again using a different id
-            ContentInfo cachedInfo = (*contentIter).second;
-            id = peer->findNextContentID();
-
-            // erase old id & insert new id
-            peer->ContentStreams.erase(contentIter);
-            peer->sendContentQueue.erase(id);
-            peer->ContentStreams[id] = cachedInfo;
-
-            // write packet to stream
-            peer->writeByte(PKTID_CONTENTSTREAM_REQUEST);
-            peer->writeInt<uint32_t>(cachedInfo.size);
-            peer->writeInt<uint16_t>(id);
-            peer->writeInt<uint8_t>(cachedInfo.type);
-
-            for (int i = 0; i < 32; i++)
-                peer->writeByte(cachedInfo.hash[i]);
-
-            return;
-        }
-        case CS_INVALID_ID: { // some request we sent had an invalid content id :p
-            // just close the stream for now [TODO]
-            peer->ContentStreams.erase(contentIter);
-            return;
-        }
-        case CS_FAILED_HASH: { // their hash doesn't match ours
-            std::FILE *fp = (*contentIter).second.file;
-            uint8_t type = (*contentIter).second.type;
-
-            // reset the stream
-            fseek(fp, 0, SEEK_SET);
-
-            // now close our local stream
-            peer->ContentStreams.erase(contentIter);
-            peer->sendContentQueue.erase(id);
-
-            // now retry
-            peer->reqSendContent(fp, type);
-            return;
-        }
-        case CS_TOOBIG: { // requested file size is too big (aka they ran out of space probably)
-            // just close the stream for now
-            peer->ContentStreams.erase(contentIter);
-            peer->sendContentQueue.erase(id);
-            return;
-        }
-        default: {
-            // ignore it, its a malformed packet, newer packet protocol, or they're just fuzzing lol
-            return;
-        }
-    }
-}
-
-DECLARE_FOXNET_VAR_PACKET(PKTID_CONTENTSTREAM_CHUNK, FoxPeer) {
-    uint16_t id;
-    size_t sz = varSize - sizeof(uint16_t);
-    VLA<uint8_t> buff(sz);
-
-    // read id
-    if (!peer->readInt<uint16_t>(id)) {
-        return;
-    }
-
-    // check we actually have an open content stream matching this id
-    auto contentIter = peer->ContentStreams.find(id);
-    if (contentIter == peer->ContentStreams.end() || !(*contentIter).second.incomming) { // if it doesn't exist, or it's not marked as an incomming stream, abort!
-        // respond with an error
-        peer->writeByte(PKTID_CONTENTSTREAM_STATUS);
-        peer->writeInt<uint16_t>(id);
-        peer->writeByte(CS_INVALID_ID);
-
-        return;
-    }
-
-    // read the rest of the stream
-    peer->readBytes(buff.buf, sz);
-
-    // write buffer to file
-    if (fwrite((void*)buff.buf, sizeof(uint8_t), sz, (*contentIter).second.file) != sz) {
-        // error occurred while writing, for now just close it
-        peer->writeByte(PKTID_CONTENTSTREAM_STATUS);
-        peer->writeInt<uint16_t>(id);
-        peer->writeByte(CS_CLOSE);
-        peer->ContentStreams.erase(contentIter);
-
-        return;
-    }
-
-    // update processed bytes
-    (*contentIter).second.processed += sz;
-
-    // if we've received the whole content
-    if ((*contentIter).second.processed >= (*contentIter).second.size) {
-        // grab hash
-        fseek((*contentIter).second.file, 0, SEEK_SET);
-        sha2::sha256_hash hash = sha2::sha256_file((*contentIter).second.file, (*contentIter).second.size);
-
-        // compare hash
-        for (int i = 0; i < 32; i++) {
-            if (hash[i] != (*contentIter).second.hash[i]) {
-                // respond with an error
-                peer->writeByte(PKTID_CONTENTSTREAM_STATUS);
-                peer->writeInt<uint16_t>(id);
-                peer->writeByte(CS_FAILED_HASH);
-                peer->ContentStreams.erase(contentIter);
-
-                return;
-            }
-        }
-
-        // reset stream, pass it to the event
-        fseek((*contentIter).second.file, 0, SEEK_SET);
-        peer->onContentReceived((*contentIter).second);
-
-        // erase content stream
-        peer->ContentStreams.erase(contentIter);
-    }
 }
 
 FoxPeer::FoxPeer() {
@@ -345,90 +142,6 @@ void FoxPeer::patchVarPacket(size_t indx) {
 
     // now patch the dummy size, (first 2 bytes)
     patchInt(pSize, indx);
-}
-
-void FoxPeer::reqSendContent(std::FILE *file, uint8_t contentType) {
-    ContentInfo cOut;
-    sha2::sha256_hash hash;
-    uint16_t id = findNextContentID();
-    size_t sz;
-
-    // grab the file size
-    fseek(file, 0L, SEEK_END);
-    sz = ftell(file);
-    fseek(file, 0, SEEK_SET);
-
-    if (sz > CONTENTSTREAM_MAX_SIZE) {
-        FOXFATAL("File stream is too large! aborting content send..");
-    }
-
-    // generate the file hash
-    hash = sha2::sha256_file(file, sz);
-    fseek(file, 0, SEEK_SET);
-
-    writeByte(PKTID_CONTENTSTREAM_REQUEST);
-
-    // write the buffer size
-    writeInt<uint32_t>(sz);
-
-    // write the id
-    writeInt<uint16_t>(id);
-
-    // write the content type
-    writeInt<uint8_t>(contentType);
-
-    // write hash to buffer
-    for (int i = 0; i < 32; i++)
-        writeByte(hash[i]);
-
-    cOut.hash = hash;
-    cOut.processed = 0;
-    cOut.size = sz;
-    cOut.file = file;
-    cOut.type = contentType;
-    cOut.incomming = false;
-    ContentStreams[id] = cOut;
-}
-
-bool FoxPeer::sendContentChunk(uint16_t id) {
-    auto contIter = ContentStreams.find(id);
-    if (contIter == ContentStreams.end()) // sanity check
-        return false;
-
-    size_t indx = prepareVarPacket(PKTID_CONTENTSTREAM_CHUNK);
-    size_t sz = (*contIter).second.size - (*contIter).second.processed;
-    int read;
-
-    // make sure we don't overflow the packet size
-    if (sz > MAX_PACKET_SIZE - sizeof(uint16_t)) // uint16_t is to make sure we have room for our content id
-        sz = MAX_PACKET_SIZE - sizeof(uint16_t);
-
-    VLA<uint8_t> buf(sz);
-
-    // write the content id
-    writeInt<uint16_t>(id);
-
-    // read from the file into our temp buff
-    if ((read = fread((void*)buf.buf, sizeof(uint8_t), sz, (*contIter).second.file)) != sz) {
-        // just fail silently, erase the content stream (but not from the queue since this can be called while iterating over it!)
-        ContentStreams.erase(contIter);
-
-        return true;
-    }
-
-    // write buffer to out stream
-    writeBytes(buf.buf, sz);
-
-    // complete var packet
-    patchVarPacket(indx);
-
-    // end stream if we're done
-    if (((*contIter).second.processed += sz) == (*contIter).second.size) {
-        onContentSent((*contIter).second);
-        ContentStreams.erase(contIter);
-    }
-
-    return true;
 }
 
 int FoxPeer::rawRecv(size_t sz) {
@@ -503,19 +216,6 @@ void FoxPeer::onPong(int64_t peerTime, int64_t currTime) {
     // stubbed
 }
 
-bool FoxPeer::onContentRequest(uint8_t type, const ContentInfo content) {
-    return false; // by default reject every request if the user doesn't implement this method
-}
-
-void FoxPeer::onContentReceived(const ContentInfo content) {
-    // stubbed
-}
-
-void FoxPeer::onContentSent(const ContentInfo content) {
-    // stubbed
-}
-
-
 bool FoxPeer::isAlive() {
     return alive;
 }
@@ -532,24 +232,6 @@ void FoxPeer::kill() {
 }
 
 bool FoxPeer::sendStep() {
-    ContentInfo info;
-
-    for (auto iter = sendContentQueue.begin(); iter != sendContentQueue.end();) {
-        auto contIter = ContentStreams.find(*iter);
-        if (contIter == ContentStreams.end()) { // if it doesn't exist in ContentStreams, erase it!
-            iter = sendContentQueue.erase(iter);
-            continue;
-        }
-
-        info = (*contIter).second;
-
-        if (!info.incomming && info.processed < info.size && !sendContentChunk(*iter)) {
-            return false; // sendContentChunk() failed, which means a broken socket
-        }
-
-        iter++;
-    }
-
     // call onStep() before flushing our send buffer so that any queued bytes will be sent
     onStep();
 

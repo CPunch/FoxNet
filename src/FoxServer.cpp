@@ -26,15 +26,19 @@ DECLARE_FOXNET_PACKET(C2S_HANDSHAKE, FoxServerPeer) {
     peer->readByte(minor);
     peer->readByte(endian);
 
+    response = !memcmp(magic, FOXMAGIC, FOXMAGICLEN) && major == FOXNET_MAJOR;
+
     // if our endians are different, set the peer to flip the endians!
     peer->setFlipEndian(endian != isBigEndian());
-
-    response = !memcmp(magic, FOXMAGIC, FOXMAGICLEN) && major == FOXNET_MAJOR;
 
     // now respond
     peer->writeByte(S2C_HANDSHAKE);
     peer->writeBytes((Byte*)magic, FOXMAGICLEN);
     peer->writeByte(response);
+
+    if (!response) {
+        FOXFATAL("c2s_handshake failed!")
+    }
 
     peer->onReady();
 } 
