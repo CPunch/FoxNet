@@ -35,7 +35,7 @@ int main() {
         FoxNet::FoxServer<ExamplePeer> server(23337);
 
         while(1) {
-            if (!server.pollPeers(1000)) { // if poll() didn't have any events to run, ping the peers
+            if (!server.pollPeers(1000)) { // if poll() didn't have any events to run, ping the peers to keep the connection alive
                 server.pingPeers();
                 std::cout << server.getPeerList().size() << " peers connected!" << std::endl;
             }

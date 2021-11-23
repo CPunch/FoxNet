@@ -1,0 +1,36 @@
+name: Check Builds
+
+on: [push]
+jobs:
+  ubuntu-build:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+      - name: Install dependencies
+        run: sudo apt install clang cmake -y
+      - name: Create CMake build files
+        run: cmake -B build
+      - name: Check compilation
+        run: cmake --build build --config Release
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: foxnet-binaries-ubuntu
+          path: bin
+
+  windows-build:
+      runs-on: windows-2019
+      steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: recursive
+      - name: Create CMake build files
+        run: cmake -B build
+      - name: Check compilation
+        run: cmake --build build --config Release
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: foxnet-binaries-windows
+          path: bin

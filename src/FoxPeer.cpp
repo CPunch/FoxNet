@@ -85,8 +85,6 @@ uint16_t FoxPeer::findNextContentID() {
     return contentID++;
 }
 
-// ============== CONTENTSTREAM PACKET DECLARATIONS ==============
-
 DECLARE_FOXNET_PACKET(PKTID_PING, FoxPeer) {
     int64_t peerTime;
     int64_t currTime = getTimestamp();
@@ -107,6 +105,8 @@ DECLARE_FOXNET_PACKET(PKTID_PONG, FoxPeer) {
 
     peer->onPong(peerTime, currTime);
 }
+
+// ============== CONTENTSTREAM PACKET DECLARATIONS ==============
 
 DECLARE_FOXNET_PACKET(PKTID_CONTENTSTREAM_REQUEST, FoxPeer) {
     sha2::sha256_hash hash;
@@ -550,11 +550,12 @@ bool FoxPeer::sendStep() {
         iter++;
     }
 
+    // call onStep() before flushing our send buffer so that any queued bytes will be sent
+    onStep();
+
     if (sizeOut() > 0 && !flushSend()) {
         return false;
     }
-
-    onStep();
 
     return true;
 }
