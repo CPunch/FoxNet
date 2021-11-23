@@ -1,6 +1,13 @@
 name: Check Builds
 
-on: [push]
+on:
+  push:
+    paths:
+        - examples/**
+        - src/**
+        - include/**
+        - .github/workflows/check-build.yaml
+
 jobs:
   ubuntu-build:
     runs-on: ubuntu-20.04
