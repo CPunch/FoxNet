@@ -151,15 +151,17 @@ int FoxPeer::rawRecv(size_t sz) {
     VLA<Byte> buf(sz);
     int rcvd = recv(sock, (buffer_t*)(buf.buf), sz, 0);
 
-    /*std::cout << "recieved " << rcvd << " bytes" << std::endl;
+#ifdef DEBUG
+    std::cout << "received " << rcvd << " bytes { " << std::endl << "\t";
 
     for (int i = 0; i < rcvd; i++) {
         std::cout << "0x" << std::hex << std::setw(2) << std::setfill('0') << (int)buf[i] << std::dec << " ";
         if ((i+1) % 8 == 0)
-            std::cout << std::endl;
+            std::cout << std::endl << "\t";
     }
 
-    std::cout << std::endl;*/
+    std::cout << std::endl << "}" << std::endl;
+#endif
 
     if (rcvd == 0 || (SOCKETERROR(rcvd) && FN_ERRNO != FN_EWOULD
 #ifndef _WIN32
@@ -315,7 +317,7 @@ bool FoxPeer::recvStep() {
                 }
 
                 // reset
-                flushIn(); // just make sure we don't leave any unused bytes in the queue so we don't mess up future packets
+                flushIn(); // just make sure we don't leave any unused bytes in the queue so we don't mess up future received packets
                 currentPkt = PKTID_NONE;
                 break;
             }
@@ -336,24 +338,26 @@ bool FoxPeer::flushSend() {
     if (buffer.size() == 0)
         return true;
 
-    //std::cout << "sending " << buffer.size() << " bytes..." << std::endl;
-
     // write bytes to the socket until an error occurs or we finish reading
     do {
         sent = send(sock, (buffer_t*)(&buffer[sentBytes]), buffer.size() - sentBytes, 0);
-        /*std::cout << " . ";
-        for (size_t i = 0; i < sent; i++) {
-            std::cout << "0x" << std::hex << std::setw(2) << std::setfill('0') << (int)buffer[i+sentBytes] << std::dec << " ";
-            if ((i+1) % 8 == 0)
-                std::cout << std::endl;
-        }*/
 
         // if the socket closed or an error occurred, return the error result
         if (sent == 0 || (SOCKETERROR(sent) && FN_ERRNO != FN_EWOULD))
             return false;
     } while((sentBytes += sent) != buffer.size());
 
-    //std::cout << std::endl;
+#ifdef DEBUG
+    std::cout << "sent " << sentBytes << " bytes : { " << std::endl << "\t";
+
+    for (size_t i = 0; i < sentBytes; i++) {
+        std::cout << "0x" << std::hex << std::setw(2) << std::setfill('0') << (int)buffer[i] << std::dec << " ";
+        if ((i+1) % 8 == 0)
+            std::cout << std::endl << "\t";
+    }
+
+    std::cout << std::endl << "}" << std::endl;
+#endif
 
     flushOut();
     return true;
