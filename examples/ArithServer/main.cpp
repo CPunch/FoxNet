@@ -21,7 +21,7 @@ DECLARE_FOXNET_PACKET(C2S_REQ_ADD, ExamplePeer) {
 
     std::cout << "got (" << a << ", " << b << ")" << std::endl;
 
-    // perform advanced intensive arithmatic operation for our client
+    // perform advanced intensive arithmetic operation for our client
     res = a + b;
 
     peer->writeByte(S2C_NUM_RESPONSE);

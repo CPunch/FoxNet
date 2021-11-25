@@ -10,7 +10,7 @@ on:
 
 jobs:
   ubuntu-build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
@@ -27,7 +27,7 @@ jobs:
           path: bin
 
   windows-build:
-      runs-on: windows-2019
+      runs-on: windows-latest
       steps:
       - uses: actions/checkout@v2
         with:
@@ -41,3 +41,18 @@ jobs:
         with:
           name: foxnet-binaries-windows
           path: bin
+
+  macOS-build:
+    runs-on: macos-latest
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+    - name: Create CMake build files
+      run: cmake -B build
+    - name: Check compilation
+      run: cmake --build build
+    - name: Upload build artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: foxnet-binaries-macos
+        path: bin
