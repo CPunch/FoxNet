@@ -27,12 +27,9 @@ namespace FoxNet {
     typedef enum {
         PKTID_NONE, // invalid packet ID, probably means we're waiting for a packet
         // ======= PEER TO PEER PACKETS =======
-        PKTID_VAR_LENGTH, // uint32_t (pkt body size) & uint8_t (pkt ID) follows
-        PKTID_CONTENTSTREAM_REQUEST, // requests to open a content stream [uint32_t content size] [uint16_t content id] [uint8_t type] [sha256 hash]
-        PKTID_CONTENTSTREAM_STATUS, // sends update information regarding a content stream [uint16_t content id] [uint8_t CONTENTSTATUS]
-        PKTID_CONTENTSTREAM_CHUNK, // [var-length] [uint16_t content id] [content]
         PKTID_PING,
         PKTID_PONG, // (sent in response to PKTID_PING)
+        PKTID_VAR_LENGTH, // uint32_t (pkt body size) & uint8_t (pkt ID) follows
         // ======= CLIENT TO SERVER PACKETS =======
         C2S_HANDSHAKE, // sends info like FoxNet version & endian flag
         // ======= SERVER TO CLIENT PACKETS =======
@@ -54,7 +51,7 @@ namespace FoxNet {
         PacketInfo(): handler(nullptr), size(0), variable(false) {}
     };
 
-    inline bool isBigEndian() {
+    inline Byte isBigEndian() {
         union {
             uint32_t i;
             Byte c[4];

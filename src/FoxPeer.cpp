@@ -138,7 +138,7 @@ size_t FoxPeer::prepareVarPacket(PktID id) {
 
 void FoxPeer::patchVarPacket(size_t indx) {
     // get the size of the packet
-    uint16_t pSize = sizeOut() - sizeof(uint16_t) - sizeof(uint8_t) - indx;
+    uint16_t pSize = (uint16_t)(sizeOut() - sizeof(uint16_t) - sizeof(uint8_t) - indx);
 
     // now patch the dummy size, (first 2 bytes)
     patchInt(pSize, indx);
@@ -289,7 +289,7 @@ bool FoxPeer::recvStep() {
         }
         default: {
             int rec;
-            int expectedRec = pktSize - sizeIn();
+            int expectedRec = (int)(pktSize - sizeIn());
 
             // try to get our packet, if we error return false
             if (expectedRec != 0 && (rec = rawRecv(expectedRec)) == -1)
