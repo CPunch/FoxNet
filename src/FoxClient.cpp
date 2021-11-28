@@ -4,11 +4,17 @@
 
 using namespace FoxNet;
 
-FoxClient::FoxClient(std::string ip, std::string port) {
-    struct addrinfo res, *result;
-
+FoxClient::FoxClient() {
     // setup packet ids
     INIT_FOXNET_PACKET(S2C_HANDSHAKE, (sizeof(Byte) + FOXMAGICLEN))
+}
+
+FoxClient::~FoxClient() {
+    kill();
+}
+
+void FoxClient::connect(std::string ip, std::string port) {
+    struct addrinfo res, *result;
 
     // zero out our address info and setup the type
     memset(&res, 0, sizeof(addrinfo));
@@ -30,7 +36,7 @@ FoxClient::FoxClient(std::string ip, std::string port) {
             continue;
         
         // if it's not an invalid socket, break and exit the loop, we found a working addr!
-        if (!SOCKETINVALID(connect(sock, curr->ai_addr, curr->ai_addrlen)))
+        if (!SOCKETINVALID(::connect(sock, curr->ai_addr, curr->ai_addrlen)))
             break;
 
         killSocket(sock);
@@ -55,10 +61,6 @@ FoxClient::FoxClient(std::string ip, std::string port) {
     writeByte(FOXNET_MINOR);
     writeByte(isBigEndian());
     flushSend();
-}
-
-FoxClient::~FoxClient() {
-    kill();
 }
 
 DECLARE_FOXNET_PACKET(S2C_HANDSHAKE, FoxClient) {

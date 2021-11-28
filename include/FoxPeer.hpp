@@ -118,6 +118,8 @@ namespace FoxNet {
         virtual void onStep(); // fired when sendStep() is called
         virtual void onPing(int64_t peerTime, int64_t currTime); // fired when PKTID_PING is received
         virtual void onPong(int64_t peerTime, int64_t currTime); // fired when PKTID_PONG is received
+        virtual void onSend(uint8_t *data, size_t sz); // fired right before data is sent over the socket
+        virtual void onRecv(uint8_t *data, size_t sz); // fired right after data was received from the socket
 
         bool isAlive();
 

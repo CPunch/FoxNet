@@ -11,6 +11,16 @@ public:
     ExamplePeer(SOCKET sock): FoxServerPeer(sock) {
         INIT_FOXNET_PACKET(C2S_REQ_ADD, sizeof(uint32_t) + sizeof(uint32_t))
     }
+
+    void onSend(uint8_t *data, size_t sz) {
+        // xor the data
+        xorData(data, sz);
+    }
+
+    void onRecv(uint8_t *data, size_t sz) {
+        // xor the data
+        xorData(data, sz);
+    }
 };
 
 DECLARE_FOXNET_PACKET(C2S_REQ_ADD, ExamplePeer) {

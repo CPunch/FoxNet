@@ -171,13 +171,14 @@ int FoxPeer::rawRecv(size_t sz) {
         )) {
         // if the socket closed or an error occurred, return the error result
         return -1;
-        }
-
-    if (rcvd > 0)
-        rawWriteIn(buf.buf, rcvd);
-    else {
-        return 0;
     }
+
+    if (rcvd > 0) {
+        // call our event, they'll modify the data (probably)
+        onRecv(buf.buf, rcvd);
+        rawWriteIn(buf.buf, rcvd);
+    } else
+        return 0;
 
     return rcvd;
 }
@@ -215,6 +216,14 @@ void FoxPeer::onPing(int64_t peerTime, int64_t currTime) {
 }
 
 void FoxPeer::onPong(int64_t peerTime, int64_t currTime) {
+    // stubbed
+}
+
+void FoxPeer::onSend(uint8_t *data, size_t sz) {
+    // stubbed
+}
+
+void FoxPeer::onRecv(uint8_t *data, size_t sz) {
     // stubbed
 }
 
@@ -337,6 +346,9 @@ bool FoxPeer::flushSend() {
     // sanity check, don't send nothing
     if (buffer.size() == 0)
         return true;
+
+    // call our event, they'll modify the data (probably)
+    onSend(buffer.data(), buffer.size());
 
     // write bytes to the socket until an error occurs or we finish reading
     do {

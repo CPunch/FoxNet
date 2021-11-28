@@ -10,8 +10,10 @@ private:
     DEF_FOXNET_PACKET(S2C_NUM_RESPONSE)
 
 public:
-    ExampleClient(std::string ip, std::string port): FoxClient(ip, port) {
+    ExampleClient(std::string ip, std::string port) {
         INIT_FOXNET_PACKET(S2C_NUM_RESPONSE, sizeof(uint32_t))
+
+        connect(ip, port);
     }
 
     void onReady() {
@@ -24,6 +26,16 @@ public:
 
     void onPing(int64_t peerTime, int64_t currTime) {
         std::cout << "ping : " << currTime - peerTime << std::endl;
+    }
+
+    void onSend(uint8_t *data, size_t sz) {
+        // xor the data
+        xorData(data, sz);
+    }
+
+    void onRecv(uint8_t *data, size_t sz) {
+        // xor the data
+        xorData(data, sz);
     }
 };
 
