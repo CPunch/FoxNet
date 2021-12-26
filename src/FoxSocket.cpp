@@ -120,7 +120,7 @@ bool FoxSocket::readBytes(Byte *out, size_t sz) {
 
 void FoxSocket::writeBytes(Byte *in, size_t sz) {
     ByteStream::writeBytes(in, sz);
-    onSend((outBuffer.end()-sz).base(), sz);
+    onSend((outBuffer.data() + outBuffer.size() - sz), sz);
 }
 
 void FoxSocket::connect(std::string ip, std::string port) {
