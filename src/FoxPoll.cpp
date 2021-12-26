@@ -118,6 +118,8 @@ std::vector<FoxPollEvent> FoxPollList::pollList(int timeout) {
     int nEvents;
 
 #ifdef __linux__
+// fastpath: we store the FoxSocket* pointer directly in the epoll_data_t, saving us a lookup into our sockMap[].
+//      not to mention the various improvements epoll() has over poll() :D
     nEvents = epoll_wait(epollfd, ep_events, MAX_EPOLL_EVENTS, timeout);
 
     if (SOCKETERROR(nEvents)) {

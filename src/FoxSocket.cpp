@@ -41,7 +41,7 @@ FoxSocket::RawSockReturn FoxSocket::rawRecv(size_t sz) {
     int start = inBuffer.size();
 
     inBuffer.resize(start + sz);
-    rcvd = recv(sock, (buffer_t*)(inBuffer.data() + start), sz, 0);
+    rcvd = ::recv(sock, (buffer_t*)(inBuffer.data() + start), sz, 0);
 
     if (rcvd == 0) {
         errCode = RAWSOCK_CLOSED;
@@ -68,7 +68,7 @@ FoxSocket::RawSockReturn FoxSocket::rawSend(size_t sz) {
 
     // write bytes to the socket until an error occurs or we finish sending
     do {
-        sent = send(sock, (buffer_t*)(outBuffer.data() + sentBytes), sz - sentBytes, 0);
+        sent = ::send(sock, (buffer_t*)(outBuffer.data() + sentBytes), sz - sentBytes, 0);
 
         // check for error result
         if (sent == 0) { // connection closed gracefully
@@ -124,7 +124,7 @@ void FoxSocket::writeBytes(Byte *in, size_t sz) {
 }
 
 void FoxSocket::connect(std::string ip, std::string port) {
-    struct addrinfo res, *result;
+    struct addrinfo res, *result, *curr;
 
     if (!SOCKETINVALID(sock)) {
         FOXFATAL("socket already setup!")
@@ -136,14 +136,13 @@ void FoxSocket::connect(std::string ip, std::string port) {
     res.ai_socktype = SOCK_STREAM;
 
     // grab the address info
-    if (getaddrinfo(ip.c_str(), port.c_str(), &res, &result) != 0) {
+    if (::getaddrinfo(ip.c_str(), port.c_str(), &res, &result) != 0) {
         FOXFATAL("getaddrinfo() failed!");
     }
 
     // getaddrinfo returns a list of possible addresses, step through them and try them until we find a valid address
-    struct addrinfo *curr;
     for (curr = result; curr != NULL; curr = curr->ai_next) {
-        sock = socket(curr->ai_family, curr->ai_socktype, curr->ai_protocol);
+        sock = ::socket(curr->ai_family, curr->ai_socktype, curr->ai_protocol);
 
         // if it failed, try the next sock
         if (SOCKETINVALID(sock))
@@ -172,7 +171,7 @@ void FoxSocket::bind(uint16_t port) {
     }
 
     // open our socket
-    sock = socket(AF_INET, SOCK_STREAM, 0);
+    sock = ::socket(AF_INET, SOCK_STREAM, 0);
     if (SOCKETINVALID(sock)) {
         FOXFATAL("socket() failed!");
     }
@@ -180,9 +179,9 @@ void FoxSocket::bind(uint16_t port) {
     // attach socket to the port
     int opt = 1;
 #ifdef _WIN32
-    if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (const char*)&opt, sizeof(opt)) != 0) {
+    if (::setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (const char*)&opt, sizeof(opt)) != 0) {
 #else
-    if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) != 0) {
+    if (::setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) != 0) {
 #endif
         FOXFATAL("setsockopt() failed!");
     }
@@ -215,9 +214,9 @@ void FoxSocket::acceptFrom(FoxSocket *host) {
 bool FoxSocket::setNonBlocking(void) {
 #ifdef _WIN32
     unsigned long mode = 1;
-    if (ioctlsocket(sock, FIONBIO, &mode) != 0) {
+    if (::ioctlsocket(sock, FIONBIO, &mode) != 0) {
 #else
-    if (fcntl(sock, F_SETFL, (fcntl(sock, F_GETFL, 0) | O_NONBLOCK)) != 0) {
+    if (::fcntl(sock, F_SETFL, (::fcntl(sock, F_GETFL, 0) | O_NONBLOCK)) != 0) {
 #endif
         FOXWARN("fcntl failed on new connection");
 #ifdef _WIN32
