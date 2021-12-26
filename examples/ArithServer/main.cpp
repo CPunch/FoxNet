@@ -8,7 +8,7 @@ private:
     DEF_FOXNET_PACKET(C2S_REQ_ADD);
 
 public:
-    ExamplePeer(SOCKET sock): FoxServerPeer(sock) {
+    ExamplePeer() {
         INIT_FOXNET_PACKET(C2S_REQ_ADD, sizeof(uint32_t) + sizeof(uint32_t))
     }
 

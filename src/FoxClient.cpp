@@ -9,50 +9,11 @@ FoxClient::FoxClient() {
     INIT_FOXNET_PACKET(S2C_HANDSHAKE, (sizeof(Byte) + FOXMAGICLEN))
 }
 
-FoxClient::~FoxClient() {
-    kill();
-}
-
 void FoxClient::connect(std::string ip, std::string port) {
-    struct addrinfo res, *result;
+    // connect to ip & port
+    FoxSocket::connect(ip, port);
 
-    // zero out our address info and setup the type
-    memset(&res, 0, sizeof(addrinfo));
-    res.ai_family = AF_UNSPEC;
-    res.ai_socktype = SOCK_STREAM;
-
-    // grab the address info
-    if (getaddrinfo(ip.c_str(), port.c_str(), &res, &result) != 0) {
-        FOXFATAL("getaddrinfo() failed!");
-    }
-
-    // getaddrinfo returns a list of possible addresses, step through them and try them until we find a valid address
-    struct addrinfo *curr;
-    for (curr = result; curr != NULL; curr = curr->ai_next) {
-        sock = socket(curr->ai_family, curr->ai_socktype, curr->ai_protocol);
-
-        // if it failed, try the next sock
-        if (SOCKETINVALID(sock))
-            continue;
-        
-        // if it's not an invalid socket, break and exit the loop, we found a working addr!
-        if (!SOCKETINVALID(::connect(sock, curr->ai_addr, curr->ai_addrlen)))
-            break;
-
-        killSocket(sock);
-    }
-    freeaddrinfo(result);
-
-    // if we reached the end of the linked list, we failed looking up the addr
-    if (curr == NULL) {
-        FOXFATAL("couldn't connect a valid address handle to socket!");
-    }
-
-    if (!setSockNonblocking(sock)) {
-        FOXFATAL("failed to unblock socket!");
-    }
-
-    fd = {sock, POLLIN};
+    pList.addSock(static_cast<FoxSocket*>(this));
 
     // connection successful! send handshake
     writeData((PktID)C2S_HANDSHAKE);
@@ -60,7 +21,9 @@ void FoxClient::connect(std::string ip, std::string port) {
     writeByte(FOXNET_MAJOR);
     writeByte(FOXNET_MINOR);
     writeByte(isBigEndian());
-    flushSend();
+
+    if (!handlePollOut(pList))
+        FOXFATAL("couldn't send C2S_HANDSHAKE!")
 }
 
 DECLARE_FOXNET_PACKET(S2C_HANDSHAKE, FoxClient) {
@@ -82,29 +45,21 @@ void FoxClient::pollPeer(int timeout) {
         return;
     }
 
-    if (!sendStep()) {
+    std::vector<FoxPollEvent> event = pList.pollList(timeout);
+
+    if (event.size() != 1)
+        return;
+
+    // handle events
+    if (event[0].pollIn && !handlePollIn(pList))
+        goto _FC_kill;
+
+    if (event[0].pollOut && !handlePollOut(pList))
+        goto _FC_kill;
+
+    if (!event[0].pollIn && !event[0].pollOut) { // no events? socket error
+_FC_kill:
         kill();
         return;
     }
-
-    // poll() blocks until there's an event on our socket
-    int events = poll(&fd, 1, timeout); // poll returns -1 for error, or the number of events
-    if (SOCKETERROR(events)) {
-        FOXFATAL("poll() failed!");
-    }
-
-    // if it wasn't a POLLIN, it was an error or socket hangup
-    if (fd.revents & ~POLLIN) {
-        FOXFATAL("error on client socket!");
-    }
-
-    // try steping, if there was an error handling a packet, kill the connection!
-    if (fd.revents & POLLIN && !recvStep()) {
-        kill();
-
-        if (exceptionThrown)
-            throw cachedException;
-    }
-
-    fd.revents = 0;
 }

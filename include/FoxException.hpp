@@ -7,8 +7,8 @@ namespace FoxNet {
     struct FoxException : public std::exception {
         const char *errMsg;
 
-        FoxException();
+        FoxException(void);
         FoxException(const char *errStr);
-        const char *what() const throw();
+        const char *what(void) const throw();
     };
 }

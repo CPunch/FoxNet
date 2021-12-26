@@ -4,14 +4,6 @@
 using namespace FoxNet;
 
 FoxServerPeer::FoxServerPeer() {
-    setupPackets();
-}
-
-FoxServerPeer::FoxServerPeer(SOCKET sock): FoxPeer(sock) {
-    setupPackets();
-}
-
-void FoxServerPeer::setupPackets() {
     INIT_FOXNET_PACKET(C2S_HANDSHAKE, (sizeof(Byte) + sizeof(Byte) + sizeof(Byte) + FOXMAGICLEN))
 }
 

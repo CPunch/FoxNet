@@ -3,14 +3,15 @@
 #include <iterator>
 #include <cstddef>
 
-#include "FoxPeer.hpp"
+#include "FoxSocket.hpp"
 
 namespace FoxNet {
     struct FoxPollEvent {
-        SOCKET sock;
+        FoxSocket *sock;
         bool pollIn;
+        bool pollOut;
 
-        FoxPollEvent(SOCKET, bool);
+        FoxPollEvent(FoxSocket*, bool, bool);
     };
 
     class FoxPollList {
@@ -21,17 +22,21 @@ namespace FoxNet {
 #else
         std::vector<PollFD> fds; // raw poll descriptor
 #endif
+        std::map<SOCKET, FoxSocket*> sockMap;
 
         void _setup(size_t res);
 
     public:
-        FoxPollList();
+        FoxPollList(void);
         FoxPollList(size_t reserved);
-        ~FoxPollList();
+        ~FoxPollList(void);
 
-        void addSock(SOCKET fd);
-        void deleteSock(SOCKET fd);
+        void addSock(FoxSocket*);
+        void rmvSock(FoxSocket*);
+        void addPollOut(FoxSocket*);
+        void rmvPollOut(FoxSocket*);
 
         std::vector<FoxPollEvent> pollList(int timeout);
+        std::vector<FoxSocket*> getList(void);
     };
 }

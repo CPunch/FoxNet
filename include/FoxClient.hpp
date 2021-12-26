@@ -2,17 +2,17 @@
 
 #include <string>
 #include "FoxPeer.hpp"
+#include "FoxPoll.hpp"
 
 namespace FoxNet {
     class FoxClient : public FoxPeer {
     private:
-        PollFD fd;
+        FoxPollList pList;
 
         DEF_FOXNET_PACKET(S2C_HANDSHAKE)
 
     public:
-        FoxClient();
-        ~FoxClient();
+        FoxClient(void);
 
         // NOTE: this function can throw a FoxException!
         void connect(std::string ip, std::string port);

@@ -51,21 +51,21 @@ namespace FoxNet {
         void rawWriteIn(Byte *in, size_t sz); // write to the in buffer
 
     public:
-        ByteStream();
+        ByteStream(void);
 
-        std::vector<Byte>& getOutBuffer();
-        std::vector<Byte>& getInBuffer();
-        void flushOut(); // clears the out (write()) buffer
-        void flushIn(); // clears the in (read()) buffer
-        size_t sizeOut(); // size of the out (write()) buffer
-        size_t sizeIn(); // size of the in (read()) buffer
+        std::vector<Byte>& getOutBuffer(void);
+        std::vector<Byte>& getInBuffer(void);
+        void flushOut(void); // clears the out (write()) buffer
+        void flushIn(void); // clears the in (read()) buffer
+        size_t sizeOut(void); // size of the out (write()) buffer
+        size_t sizeIn(void); // size of the in (read()) buffer
 
         // if set to true, integers read and written will be automatically flipped to the opposite endian-ness
         // note: this only has an effect if the integers are written or read using writeInt() or readInt()
         void setFlipEndian(bool);
 
-        bool readBytes(Byte *out, size_t sz);
-        void writeBytes(Byte *in, size_t sz);
+        virtual bool readBytes(Byte *out, size_t sz);
+        virtual void writeBytes(Byte *in, size_t sz);
         bool patchBytes(Byte *in, size_t sz, size_t indx);
 
         inline void writeByte(Byte in) {

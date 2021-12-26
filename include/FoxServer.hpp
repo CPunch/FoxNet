@@ -1,24 +1,21 @@
 #pragma once
 
 #include "FoxNet.hpp"
+#include "FoxSocket.hpp"
 #include "FoxPeer.hpp"
 #include "FoxPoll.hpp"
 
 namespace FoxNet {
     // base FoxServer peer class, make a parent class of this and add your own custom packet ids
     class FoxServerPeer : public FoxPeer {
-    private:
-        void setupPackets();
-
     public:
-        FoxServerPeer();
-        FoxServerPeer(SOCKET sock);
+        FoxServerPeer(void);
 
         DEF_FOXNET_PACKET(C2S_HANDSHAKE)
     };
 
     template<typename peerType>
-    class FoxServer {
+    class FoxServer : FoxSocket {
         static_assert(std::is_base_of<FoxServerPeer, peerType>::value, "peerType must derive from FoxServerPeer");
 
     private:
@@ -28,7 +25,12 @@ namespace FoxNet {
         struct sockaddr_in address;
         FoxPollList pollList;
 
-        std::map<SOCKET, peerType*> peers; // matches socket to peer
+        void killPeer(peerType *peer) {
+            onPeerDisconnect(peer);
+            pollList.rmvSock(peer);
+            delete peer;
+        }
+
     public:
 
         // events !
@@ -43,54 +45,21 @@ namespace FoxNet {
 // ============================================= [[ Base FoxServer implementation ]] =============================================
 
         FoxServer(uint16_t p): port(p) {
-            _FoxNet_Init();
+            // binds the socket a port
+            bind(p);
 
-            // open our socket
-            sock = socket(AF_INET, SOCK_STREAM, 0);
-            if (SOCKETINVALID(sock)) {
-                FOXFATAL("socket() failed!");
-            }
-
-            // attach socket to the port
-            int opt = 1;
-#ifdef _WIN32
-            if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, (const char*)&opt, sizeof(opt)) != 0) {
-#else
-            if (setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) != 0) {
-#endif
-                FOXFATAL("setsockopt() failed!");
-            }
-            address.sin_family = AF_INET;
-            address.sin_addr.s_addr = INADDR_ANY;
-            address.sin_port = htons(port);
-
-            addressSize = sizeof(address);
-
-            // bind to the port
-            if (SOCKETERROR(bind(sock, (struct sockaddr *)&address, addressSize))) {
-                FOXFATAL("bind() failed!");
-            }
-
-            if (SOCKETERROR(listen(sock, SOMAXCONN))) {
-                FOXFATAL("listen() failed!");
-            }
-
-            // set server listener to non-blocking
-            if (!setSockNonblocking(sock)) {
-                FOXFATAL("failed to unblock listener socket!");
-            }
-
-            pollList.addSock(sock);
+            pollList.addSock(this);
         }
 
         ~FoxServer() {
-            for (auto pair : peers) {
-                peerType *peer = pair.second;
-                peer->kill();
-                delete peer;
-            }
+            std::vector<FoxSocket*> peers = pollList.getList();
 
-            _FoxNet_Cleanup();
+            for (FoxSocket* peer : peers) {
+                if (peer == this) // skip us
+                    continue;
+
+                delete dynamic_cast<peerType*>(peer);
+            }
         }
 
         // used for connection keep-alive, actual packet will be sent on the next call to pollPeers()
@@ -98,8 +67,7 @@ namespace FoxNet {
             int64_t currTime = getTimestamp();
 
             // ping all peers (will be sent on next call to pollPeers())
-            for (auto &pair : peers) {
-                peerType *peer = pair.second; 
+            for (FoxSocket *peer : pollList.getList()) {
                 peer->writeByte(PKTID_PING);
                 peer->writeInt(currTime);
             }
@@ -110,104 +78,58 @@ namespace FoxNet {
             std::vector<FoxPollEvent> events;
             peerType *peer;
 
-            // check if we have any queued outgoing packets
-            for (auto pIter = peers.begin(); pIter != peers.end();) {
-                peer = (*pIter).second;
-
-                if (!peer->sendStep()) { // check if we have any outgoing packets, and if we failed to send, remove the peer
-                    onPeerDisconnect(peer);
-
-                    // remove peer from poll list
-                    pollList.deleteSock(peer->getRawSock());
-
-                    // remove peer from peers map
-                    peers.erase(pIter++);
-
-                    // free peer
-                    delete peer;
-                } else {
-                    ++pIter;
-                }
-            }
-
-            // poll() blocks until there's an event to be handled on a file descriptor in the pollfd* list passed.
             events = pollList.pollList(timeout);
 
-            // if we have 0 events, it means we hit our timeout so let the caller know
-            if (events.size() == 0)
+            if (events.size() == 0) // no events to handle, out timeout must've ran out
                 return false;
 
-            for (auto iter = events.begin(); iter != events.end(); ++iter) {
-                FoxPollEvent evnt = (*iter);
+            for (FoxPollEvent &e : events) {
+                // check if event was on our bound port
+                if (e.sock == this) {
+                    peer = new peerType();
 
-                if (evnt.sock == sock) { // event on our listener socket?
-                    // if it wasn't a POLLIN, it was an error :/
-                    if (!evnt.pollIn) {
-                        FOXFATAL("error on listener socket!");
-                    }
+                    // accept the new connection :D
+                    peer->acceptFrom(this);
 
-                    // grab the new connection
-                    SOCKET newSock = accept(sock, (struct sockaddr *)&address, (socklen_t*)&addressSize);
-                    if (SOCKETINVALID(newSock)) {
-                        FOXWARN("failed to accept new connection!")
-                        continue;
-                    }
-
-                    if (!setSockNonblocking(newSock)) {
-                        FOXWARN("failed to set socket to non-blocking!")
-                        killSocket(newSock);
-                        continue;
-                    }
-
-                    peer = new peerType(newSock);
-
-                    // add peer to map & set peer type & userdata
-                    peers[newSock] = peer;
-
-                    // add to poll list
-                    pollList.addSock(newSock);
                     onNewPeer(peer);
-                    continue;
-                } // it's not the listener, must be a peer socket event
-
-                // check if the peer still exists
-                auto pIter = peers.find(evnt.sock);
-                if (pIter == peers.end()) {
-                    FOXWARN("event on unknown socket! closing and removing from queue...");
-
-                    // remove it from the poll list & closes the socket
-                    pollList.deleteSock(evnt.sock);
-                    killSocket(evnt.sock);
+                    pollList.addSock(dynamic_cast<FoxSocket*>(peer));
                     continue;
                 }
 
-                peer = (*pIter).second;
-                if (evnt.pollIn) { // is there data waiting to be read?
-                    if (!peer->recvStep()) { // error occurred on socket
-                        goto _rmvPeer;
-                    }
-                } else { // peer disconnected or error occurred, just remove the peer
-                _rmvPeer:
-                    // remove peer
-                    peers.erase(pIter);
+                // grab peer
+                peer = dynamic_cast<peerType*>(e.sock);
 
-                    // removes sock from poll list & kills the peer
-                    pollList.deleteSock(evnt.sock);
-                    peer->kill();
+                // handle poll events
+                try {
+                    if (e.pollIn && !peer->handlePollIn(pollList))
+                        killPeer(peer);
 
-                    // calls event
-                    onPeerDisconnect(peer);
+                    if (e.pollOut && !peer->handlePollOut(pollList))
+                        killPeer(peer);
 
-                    // frees peer
-                    delete peer;
+                    if (!e.pollIn && !e.pollOut) // no normal event = connection reset or error
+                        killPeer(peer);
+                } catch(...) {
+                    killPeer(peer);
                 }
             }
 
             return true;
         }
 
-        std::map<SOCKET, peerType*>& getPeerList() {
-            return peers;
+        std::vector<peerType*> getPeerList() {
+            std::vector<peerType*> groomedPeers;
+            std::vector<FoxSocket*> peers = pollList.getList();
+
+            groomedPeers.reserve(peers.size() - 1);
+            for (FoxSocket *peer : peers) {
+                if (peer == this)
+                    continue;
+
+                groomedPeers.push_back(dynamic_cast<peerType*>(peer));
+            }
+
+            return groomedPeers;
         }
     };
 }

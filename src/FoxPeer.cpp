@@ -3,80 +3,8 @@
 
 #include <iostream>
 #include <iomanip>
-#include <mutex>
-
-// if _FNSetup > 0, WSA has already been started. if _FNSetup == 0, WSA needs to be cleaned up
-static int _FNSetup = 0;
-static std::mutex _FNSetupLock;
-
-bool FoxNet::setSockNonblocking(SOCKET sock) {
-#ifdef _WIN32
-    unsigned long mode = 1;
-    if (ioctlsocket(sock, FIONBIO, &mode) != 0) {
-#else
-    if (fcntl(sock, F_SETFL, (fcntl(sock, F_GETFL, 0) | O_NONBLOCK)) != 0) {
-#endif
-        FOXWARN("fcntl failed on new connection");
-#ifdef _WIN32
-        shutdown(sock, SD_BOTH);
-        closesocket(sock);
-#else
-        shutdown(sock, SHUT_RDWR);
-        close(sock);
-#endif
-        return false;
-    }
-
-    return true;
-}
-
-void FoxNet::killSocket(SOCKET sock) {
-#ifdef _WIN32
-    shutdown(sock, SD_BOTH);
-    closesocket(sock);
-#else
-    shutdown(sock, SHUT_RDWR);
-    close(sock);
-#endif
-}
-
-// this *SHOULD* be called before any socket API. On POSIX platforms this is stubbed, however on Windows this is required to start WSA
-void FoxNet::_FoxNet_Init() {
-    std::lock_guard<std::mutex> FNLock(_FNSetupLock);
-
-    if (_FNSetup++ > 0)
-        return; // WSA is already setup!
-
-#ifdef _WIN32
-    WSADATA wsaData;
-    if (WSAStartup(MAKEWORD(1, 1), &wsaData) != 0) {
-        FOXFATAL("WSAStartup failed!")
-    }
-#endif
-}
-
-// this *SHOULD* only be called when there is no more socket API to be called. On POSIX platforms this is stubbed, however on Windows this is required to cleanup WSA
-void FoxNet::_FoxNet_Cleanup() {
-    std::lock_guard<std::mutex> FNLock(_FNSetupLock);
-
-    if (--_FNSetup > 0)
-        return; // WSA still needs to be up, a FoxNet peer is still using it
-
-#ifdef _WIN32
-    WSACleanup();
-#endif
-}
 
 using namespace FoxNet;
-
-// this function is called first before any derived class is constructed, so it's the perfect place to initialize 
-// our default packet map & initialize WSA (if we're on windows)
-void FoxPeer::_setupPackets() {
-    INIT_FOXNET_PACKET(PKTID_PING, sizeof(int64_t))
-    INIT_FOXNET_PACKET(PKTID_PONG, sizeof(int64_t))
-
-    _FoxNet_Init();
-}
 
 DECLARE_FOXNET_PACKET(PKTID_PING, FoxPeer) {
     int64_t peerTime;
@@ -103,21 +31,8 @@ FoxPeer::FoxPeer() {
     for (int i = 0; i < UINT8_MAX; i++)
         PKTMAP[i] = PacketInfo();
 
-    _setupPackets();
-}
-
-FoxPeer::FoxPeer(SOCKET _sock) {
-    sock = _sock;
-
-    for (int i = 0; i < UINT8_MAX; i++)
-        PKTMAP[i] = PacketInfo();
-
-    _setupPackets();
-}
-
-// the base class is deconstructed last, so it's the perfect place to cleanup WSA (if we're on windows)
-FoxPeer::~FoxPeer() {
-    _FoxNet_Cleanup();
+    INIT_FOXNET_PACKET(PKTID_PING, sizeof(int64_t))
+    INIT_FOXNET_PACKET(PKTID_PONG, sizeof(int64_t))
 }
 
 size_t FoxPeer::prepareVarPacket(PktID id) {
@@ -144,45 +59,6 @@ void FoxPeer::patchVarPacket(size_t indx) {
     patchInt(pSize, indx);
 }
 
-int FoxPeer::rawRecv(size_t sz) {
-    if (sz == 0) // sanity check
-        return 0;
-
-    VLA<Byte> buf(sz);
-    int rcvd = recv(sock, (buffer_t*)(buf.buf), sz, 0);
-
-#ifdef DEBUG
-    std::cout << "received " << rcvd << " bytes { " << std::endl << "\t";
-
-    for (int i = 0; i < rcvd; i++) {
-        std::cout << "0x" << std::hex << std::setw(2) << std::setfill('0') << (int)buf[i] << std::dec << " ";
-        if ((i+1) % 8 == 0)
-            std::cout << std::endl << "\t";
-    }
-
-    std::cout << std::endl << "}" << std::endl;
-#endif
-
-    if (rcvd == 0 || (SOCKETERROR(rcvd) && FN_ERRNO != FN_EWOULD
-#ifndef _WIN32
-        // if it's a posix system, also make sure its not a EAGAIN result (which is a recoverable error, there's just nothing to read lol)
-        && FN_ERRNO != EAGAIN
-#endif
-        )) {
-        // if the socket closed or an error occurred, return the error result
-        return -1;
-    }
-
-    if (rcvd > 0) {
-        // call our event, they'll modify the data (probably)
-        onRecv(buf.buf, rcvd);
-        rawWriteIn(buf.buf, rcvd);
-    } else
-        return 0;
-
-    return rcvd;
-}
-
 bool FoxPeer::isPacketVar(PktID id) {
     return PKTMAP[id].variable;
 }
@@ -203,10 +79,6 @@ void FoxPeer::onReady() {
     // stubbed
 }
 
-void FoxPeer::onKilled() {
-    // stubbed
-}
-
 void FoxPeer::onStep() {
     // stubbed
 }
@@ -219,110 +91,88 @@ void FoxPeer::onPong(int64_t peerTime, int64_t currTime) {
     // stubbed
 }
 
-void FoxPeer::onSend(uint8_t *data, size_t sz) {
-    // stubbed
-}
+bool FoxPeer::handlePollIn(FoxPollList& plist) {
+    RawSockReturn recv;
+    PktSize pSize;
 
-void FoxPeer::onRecv(uint8_t *data, size_t sz) {
-    // stubbed
-}
-
-bool FoxPeer::isAlive() {
-    return alive;
-}
-
-void FoxPeer::kill() {
-    if (!alive)
-        return;
-
-    alive = false;
-    killSocket(sock);
-
-    // fire our event
-    onKilled();
-}
-
-bool FoxPeer::sendStep() {
-    // call onStep() before flushing our send buffer so that any queued bytes will be sent
-    onStep();
-
-    if (sizeOut() > 0 && !flushSend()) {
-        return false;
-    }
-
-    return true;
-}
-
-bool FoxPeer::recvStep() {
-    int recv;
     switch(currentPkt) {
         case PKTID_NONE: // we're queued to receive a packet
-            if ((recv = rawRecv(sizeof(PktID))) == -1) // -1 is the "actual error" result
-                return false;
+            recv = rawRecv(sizeof(PktID));
 
-            // its a recoverable error, so if we didn't get what we expected, just try again!
-            //  (^ motto for life honestly)
-            if (recv != sizeof(PktID))
-                return true;
-
-            readByte(currentPkt);
-            pktSize = getPacketSize(currentPkt);
-            break;
-        case PKTID_VAR_LENGTH: {
-            if (pktSize == 0) {
-                PktSize pSize;
-                // grab packet length
-                if ((recv = rawRecv(sizeof(PktSize) - sizeIn())) == -1)
+            switch (recv.code) {
+                case RAWSOCK_OK:
+                    readByte(currentPkt);
+                    pktSize = getPacketSize(currentPkt);
+                    break;
+                case RAWSOCK_CLOSED:
+                case RAWSOCK_ERROR:
+                default: // ??
                     return false;
-
-                if (sizeIn() != sizeof(PktSize)) // try again
-                    return true;
-
-                readInt<uint16_t>(pSize);
-                pktSize = pSize;
-
-                // if they try sending a packet larger than MAX_PACKET_SIZE kill em'
-                if (pktSize > MAX_PACKET_SIZE)
-                    return false;
-            } else {
-                // after we have our size, the pkt ID is next
-                if ((recv = rawRecv(sizeof(PktID))) == -1)
-                    return false;
-
-                if (recv != sizeof(PktID)) // try again
-                    return true;
-
-                readByte(currentPkt);
             }
             break;
-        }
+        case PKTID_VAR_LENGTH:
+            if (pktSize == 0) {
+                // grab packet length
+                recv = rawRecv(sizeof(PktSize));
+
+                switch (recv.code) {
+                    case RAWSOCK_OK:
+                        readInt<uint16_t>(pSize);
+                        pktSize = pSize;
+
+                        // if they try sending a packet larger than MAX_PACKET_SIZE kill em'
+                        if (pktSize > MAX_PACKET_SIZE)
+                            return false;
+                        break;
+                    case RAWSOCK_CLOSED:
+                    case RAWSOCK_ERROR:
+                    default: // ??
+                        return false;
+                }
+            } else {
+                recv = rawRecv(sizeof(PktID));
+
+                switch (recv.code) {
+                    case RAWSOCK_OK:
+                        readByte(currentPkt);
+                        break;
+                    case RAWSOCK_CLOSED:
+                    case RAWSOCK_ERROR:
+                    default: // ??
+                        return false;
+                }
+            }
+            break;
         default: {
             int rec;
             int expectedRec = (int)(pktSize - sizeIn());
 
             // try to get our packet, if we error return false
-            if (expectedRec != 0 && (rec = rawRecv(expectedRec)) == -1)
-                return false;
+            if (expectedRec != 0) {
+                recv = rawRecv(expectedRec);
+
+                switch (recv.code) {
+                    case RAWSOCK_OK:
+                        break;
+                    case RAWSOCK_CLOSED:
+                    case RAWSOCK_ERROR:
+                    default: // ??
+                        return false;
+                }
+            }
 
             if (sizeIn() == pktSize) {
-                try {
-                    if (isPacketVar(currentPkt)) {
-                        PktVarHandler hndlr = getVarPacketHandler(currentPkt);
-                        if (hndlr != nullptr) {
-                            hndlr(this, pktSize);
-                        }
-                    } else {
-                        // dispatch Packet Handler
-                        PktHandler hndlr = getPacketHandler(currentPkt);
-                        if (hndlr != nullptr) {
-                            hndlr(this);
-                        }
+                if (isPacketVar(currentPkt)) {
+                    PktVarHandler hndlr = getVarPacketHandler(currentPkt);
+                    if (hndlr != nullptr) {
+                        hndlr(this, pktSize);
                     }
-                } catch(FoxException &x) {
-                    // report the exception, the caller will decide to ignore it or not
-                    cachedException = x;
-                    exceptionThrown = true;
-                    return false;
+                } else {
+                    // dispatch Packet Handler
+                    PktHandler hndlr = getPacketHandler(currentPkt);
+                    if (hndlr != nullptr) {
+                        hndlr(this);
+                    }
                 }
 
                 // reset
@@ -335,44 +185,40 @@ bool FoxPeer::recvStep() {
         }
     }
 
+    if (sizeOut() > 0)
+        handlePollOut(plist);
+
     return isAlive();
 }
 
-bool FoxPeer::flushSend() {
-    std::vector<Byte> buffer = getOutBuffer();
-    size_t sentBytes = 0;
-    int sent;
+bool FoxPeer::handlePollOut(FoxPollList& plist) {
+    RawSockReturn sent;
 
-    // sanity check, don't send nothing
-    if (buffer.size() == 0)
+    // sanity check
+    if (sizeOut() == 0)
         return true;
 
-    // call our event, they'll modify the data (probably)
-    onSend(buffer.data(), buffer.size());
+    onStep();
+    sent = rawSend(sizeOut());
 
-    // write bytes to the socket until an error occurs or we finish reading
-    do {
-        sent = send(sock, (buffer_t*)(&buffer[sentBytes]), buffer.size() - sentBytes, 0);
-
-        // if the socket closed or an error occurred, return the error result
-        if (sent == 0 || (SOCKETERROR(sent) && FN_ERRNO != FN_EWOULD))
+    switch(sent.code) {
+        case RAWSOCK_OK: // we're ok!
+            if (setPollOut) { // if POLLOUT was set, unset it
+                plist.rmvPollOut(this);
+                setPollOut = false;
+            }
+            return true;
+        case RAWSOCK_POLL: // we've been asked to set the POLLOUT flag
+            if (!setPollOut) { // if POLLOUT wasn't set, set it so we'll be notified whenever the kernel has room :)
+                plist.addPollOut(this);
+                setPollOut = true;
+            }
+            return true;
+        default:
+        case RAWSOCK_CLOSED:
+        case RAWSOCK_ERROR:
             return false;
-    } while((sentBytes += sent) != buffer.size());
-
-#ifdef DEBUG
-    std::cout << "sent " << sentBytes << " bytes : { " << std::endl << "\t";
-
-    for (size_t i = 0; i < sentBytes; i++) {
-        std::cout << "0x" << std::hex << std::setw(2) << std::setfill('0') << (int)buffer[i] << std::dec << " ";
-        if ((i+1) % 8 == 0)
-            std::cout << std::endl << "\t";
     }
-
-    std::cout << std::endl << "}" << std::endl;
-#endif
-
-    flushOut();
-    return true;
 }
 
 SOCKET FoxPeer::getRawSock() {
