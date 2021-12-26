@@ -138,7 +138,7 @@ std::vector<FoxPollEvent> FoxPollList::pollList(int timeout) {
     for (auto iter = fds.begin(); iter != fds.end() && nEvents > 0; iter++) {
         PollFD pfd = (*iter);
         if (pfd.revents != 0) {
-            events.push_back(PollEvent(sockMap[(SOCKET)pfd.fd], pfd.revents & POLLIN, pfd.revents & POLLOUT));
+            events.push_back(FoxPollEvent(sockMap[(SOCKET)pfd.fd], pfd.revents & POLLIN, pfd.revents & POLLOUT));
             --nEvents; // decrement the remaining events
         }
     }
