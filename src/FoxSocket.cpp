@@ -41,7 +41,7 @@ FoxSocket::RawSockReturn FoxSocket::rawRecv(size_t sz) {
     int start = inBuffer.size();
 
     inBuffer.resize(start + sz);
-    rcvd = ::recv(sock, (buffer_t*)(inBuffer.data() + start), sz, 0);
+    rcvd = ::recv(sock, (buffer_t*)(inBuffer.data() + start), sz, FN_MSG_NOSIGNAL);
 
     if (rcvd == 0) {
         errCode = RAWSOCK_CLOSED;
@@ -68,7 +68,7 @@ FoxSocket::RawSockReturn FoxSocket::rawSend(size_t sz) {
 
     // write bytes to the socket until an error occurs or we finish sending
     do {
-        sent = ::send(sock, (buffer_t*)(outBuffer.data() + sentBytes), sz - sentBytes, 0);
+        sent = ::send(sock, (buffer_t*)(outBuffer.data() + sentBytes), sz - sentBytes, FN_MSG_NOSIGNAL);
 
         // check for error result
         if (sent == 0) { // connection closed gracefully

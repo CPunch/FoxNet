@@ -18,6 +18,7 @@
     #define poll WSAPoll
     #define FN_ERRNO WSAGetLastError()
     #define FN_EWOULD WSAEWOULDBLOCK
+    #define FN_MSG_NOSIGNAL 0
     #define SOCKETINVALID(x) (x == INVALID_SOCKET)
     #define SOCKETERROR(x) (x == SOCKET_ERROR)
 #else
@@ -41,6 +42,7 @@
     #define PollFD struct pollfd
     #define FN_ERRNO errno
     #define FN_EWOULD EWOULDBLOCK
+    #define FN_MSG_NOSIGNAL MSG_NOSIGNAL
     #define INVALID_SOCKET -1
     #define SOCKETINVALID(x) (x < 0)
     #define SOCKETERROR(x) (x == -1)

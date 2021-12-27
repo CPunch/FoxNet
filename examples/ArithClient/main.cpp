@@ -22,6 +22,8 @@ public:
         writeByte(C2S_REQ_ADD);
         writeInt<uint32_t>(12);
         writeInt<uint32_t>(56);
+
+        std::cout << "wrote long request pkt" << std::endl;
     }
 
     void onPing(int64_t peerTime, int64_t currTime) {
@@ -44,7 +46,7 @@ DECLARE_FOXNET_PACKET(S2C_NUM_RESPONSE, ExampleClient) {
 
     peer->readInt(resp);
 
-    std::cout << "got result of " << resp << std::endl;
+    //std::cout << "got result of " << resp << std::endl;
 }
 
 int main() {

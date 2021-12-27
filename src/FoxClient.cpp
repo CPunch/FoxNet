@@ -13,6 +13,9 @@ void FoxClient::connect(std::string ip, std::string port) {
     // connect to ip & port
     FoxSocket::connect(ip, port);
 
+    // set our socket to non-blocking
+    setNonBlocking();
+
     pList.addSock(static_cast<FoxSocket*>(this));
 
     // connection successful! send handshake

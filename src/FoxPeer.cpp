@@ -185,8 +185,9 @@ bool FoxPeer::handlePollIn(FoxPollList& plist) {
         }
     }
 
-    if (sizeOut() > 0)
-        handlePollOut(plist);
+    // we have data to send and handePollOut returns an error, return error result
+    if (sizeOut() > 0 && !handlePollOut(plist))
+        return false;
 
     return isAlive();
 }

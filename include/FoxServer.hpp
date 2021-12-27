@@ -90,6 +90,7 @@ namespace FoxNet {
 
                     // accept the new connection :D
                     peer->acceptFrom(this);
+                    peer->setNonBlocking();
 
                     onNewPeer(peer);
                     pollList.addSock(dynamic_cast<FoxSocket*>(peer));
