@@ -27,12 +27,56 @@ DECLARE_FOXNET_PACKET(PKTID_PONG, FoxPeer) {
     peer->onPong(peerTime, currTime);
 }
 
+DECLARE_FOXNET_PACKET(PKTID_HANDSHAKE_RES, FoxPeer) {
+    char magic[FOXMAGICLEN];
+    Byte response;
+
+    peer->readBytes((Byte*)magic, FOXMAGICLEN);
+    peer->readByte(response);
+    peer->setHandshake(response);
+
+    if (response)
+        peer->onReady();
+    else
+        peer->kill();
+}
+
+DECLARE_FOXNET_PACKET(PKTID_HANDSHAKE_REQ, FoxPeer) {
+    char magic[FOXMAGICLEN];
+    Byte minor, major, endian;
+    Byte response;
+
+    peer->readBytes((Byte*)magic, FOXMAGICLEN);
+    peer->readByte(major);
+    peer->readByte(minor);
+    peer->readByte(endian);
+
+    response = !memcmp(magic, FOXMAGIC, FOXMAGICLEN) && major == FOXNET_MAJOR;
+
+    // if our endians are different, set the peer to flip the endians!
+    peer->setFlipEndian(endian != isBigEndian());
+
+    // now respond
+    peer->writeByte(PKTID_HANDSHAKE_RES);
+    peer->writeBytes((Byte*)magic, FOXMAGICLEN);
+    peer->writeByte(response);
+    peer->setHandshake(response);
+
+    if (!response) {
+        FOXFATAL("PKTID_HANDSHAKE_REQ failed, missmatched versions!")
+    }
+
+    peer->onReady();
+} 
+
 FoxPeer::FoxPeer() {
     for (int i = 0; i < UINT8_MAX; i++)
         PKTMAP[i] = PacketInfo();
 
     INIT_FOXNET_PACKET(PKTID_PING, sizeof(int64_t))
     INIT_FOXNET_PACKET(PKTID_PONG, sizeof(int64_t))
+    INIT_FOXNET_PACKET(PKTID_HANDSHAKE_RES, (sizeof(Byte) + FOXMAGICLEN))
+    INIT_FOXNET_PACKET(PKTID_HANDSHAKE_REQ, (sizeof(Byte) + sizeof(Byte) + sizeof(Byte) + FOXMAGICLEN))
 }
 
 size_t FoxPeer::prepareVarPacket(PktID id) {
@@ -162,6 +206,12 @@ bool FoxPeer::handlePollIn(FoxPollList& plist) {
             }
 
             if (sizeIn() == pktSize) {
+                // check if they're authorized
+                if (!handshook && currentPkt != PKTID_HANDSHAKE_REQ && currentPkt != PKTID_HANDSHAKE_RES) {
+                    FOXFATAL("Peer tried sending non-authorized packet!")
+                }
+
+                // dispatch packet
                 if (isPacketVar(currentPkt)) {
                     PktVarHandler hndlr = getVarPacketHandler(currentPkt);
                     if (hndlr != nullptr) {
@@ -224,4 +274,12 @@ bool FoxPeer::handlePollOut(FoxPollList& plist) {
 
 SOCKET FoxPeer::getRawSock() {
     return sock;
+}
+
+bool FoxPeer::getHandshake() {
+    return handshook;
+}
+
+void FoxPeer::setHandshake(bool h) {
+    handshook = h;
 }

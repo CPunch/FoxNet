@@ -29,10 +29,13 @@ namespace FoxNet {
 
         DEF_FOXNET_PACKET(PKTID_PING)
         DEF_FOXNET_PACKET(PKTID_PONG)
+        DEF_FOXNET_PACKET(PKTID_HANDSHAKE_RES)
+        DEF_FOXNET_PACKET(PKTID_HANDSHAKE_REQ)
 
     protected:
         PacketInfo PKTMAP[UINT8_MAX+1];
         SOCKET sock;
+        bool handshook = false;
 
         bool isPacketVar(PktID);
         PktSize getPacketSize(PktID);
@@ -65,5 +68,7 @@ namespace FoxNet {
         bool handlePollOut(FoxPollList &plist);
 
         SOCKET getRawSock(void);
+        bool getHandshake(void);
+        void setHandshake(bool);
     };
 }

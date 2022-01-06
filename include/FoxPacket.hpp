@@ -30,10 +30,10 @@ namespace FoxNet {
         PKTID_PING,
         PKTID_PONG, // (sent in response to PKTID_PING)
         PKTID_VAR_LENGTH, // uint32_t (pkt body size) & uint8_t (pkt ID) follows
+        PKTID_HANDSHAKE_REQ, // sends info like FoxNet version & endian flag
+        PKTID_HANDSHAKE_RES, // responds to PKTID_HANDSHAKE_REQ, tells if the handshake is accepted
         // ======= CLIENT TO SERVER PACKETS =======
-        C2S_HANDSHAKE, // sends info like FoxNet version & endian flag
         // ======= SERVER TO CLIENT PACKETS =======
-        S2C_HANDSHAKE, // responds to C2S_HANDSHAKE, tells if the handshake is accepted
         PKTID_USER_PACKET_START, // marks the start of user packets
     } PEER_PACKET_ID;
 

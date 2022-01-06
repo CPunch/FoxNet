@@ -5,8 +5,7 @@
 using namespace FoxNet;
 
 FoxClient::FoxClient() {
-    // setup packet ids
-    INIT_FOXNET_PACKET(S2C_HANDSHAKE, (sizeof(Byte) + FOXMAGICLEN))
+    // TODO
 }
 
 void FoxClient::connect(std::string ip, std::string port) {
@@ -19,27 +18,14 @@ void FoxClient::connect(std::string ip, std::string port) {
     pList.addSock(static_cast<FoxSocket*>(this));
 
     // connection successful! send handshake
-    writeData((PktID)C2S_HANDSHAKE);
+    writeData((PktID)PKTID_HANDSHAKE_REQ);
     writeBytes((Byte*)FOXMAGIC, FOXMAGICLEN);
     writeByte(FOXNET_MAJOR);
     writeByte(FOXNET_MINOR);
     writeByte(isBigEndian());
 
     if (!handlePollOut(pList))
-        FOXFATAL("couldn't send C2S_HANDSHAKE!")
-}
-
-DECLARE_FOXNET_PACKET(S2C_HANDSHAKE, FoxClient) {
-    char magic[FOXMAGICLEN];
-    Byte response;
-
-    peer->readBytes((Byte*)magic, FOXMAGICLEN);
-    peer->readByte(response);
-
-    if (response)
-        peer->onReady();
-    else
-        peer->kill();
+        FOXFATAL("couldn't send PKTID_HANDSHAKE_REQ!")
 }
 
 void FoxClient::pollPeer(int timeout) {

@@ -9,8 +9,6 @@ namespace FoxNet {
     private:
         FoxPollList pList;
 
-        DEF_FOXNET_PACKET(S2C_HANDSHAKE)
-
     public:
         FoxClient(void);
 

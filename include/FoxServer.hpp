@@ -10,8 +10,6 @@ namespace FoxNet {
     class FoxServerPeer : public FoxPeer {
     public:
         FoxServerPeer(void);
-
-        DEF_FOXNET_PACKET(C2S_HANDSHAKE)
     };
 
     template<typename peerType>
